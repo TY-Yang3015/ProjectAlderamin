@@ -29,30 +29,35 @@ class PsiFormerBlock(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.ndarray):
-        h = MultiHeadCrossAttention(num_heads=self.num_heads,
-                                    output_channels=x.shape[-1],
-                                    use_memory_efficient_attention=self.use_memory_efficient_attention,
-                                    group=self.group,
-                                    use_qkv_bias=True,
-                                    use_dropout=False,
-                                    computation_dtype=self.computation_dtype,
-                                    param_dtype=self.param_dtype
-                                    )(x, False, None)
-        h = nn.Dense(features=x.shape[-1],
-                     use_bias=False,
-                     dtype=self.computation_dtype,
-                     param_dtype=self.param_dtype)(h)
+        h = MultiHeadCrossAttention(
+            num_heads=self.num_heads,
+            output_channels=x.shape[-1],
+            use_memory_efficient_attention=self.use_memory_efficient_attention,
+            group=self.group,
+            use_qkv_bias=True,
+            use_dropout=False,
+            computation_dtype=self.computation_dtype,
+            param_dtype=self.param_dtype,
+        )(x, False, None)
+        h = nn.Dense(
+            features=x.shape[-1],
+            use_bias=False,
+            dtype=self.computation_dtype,
+            param_dtype=self.param_dtype,
+        )(h)
 
         h += x
         h += nn.tanh(
-            nn.Dense(features=x.shape[-1],
-                     use_bias=True,
-                     dtype=self.computation_dtype,
-                     param_dtype=self.param_dtype
-                     )(h)
+            nn.Dense(
+                features=x.shape[-1],
+                use_bias=True,
+                dtype=self.computation_dtype,
+                param_dtype=self.param_dtype,
+            )(h)
         )
 
         return h
+
 
 # import jax
 # print(PsiformerBlock(4, False).tabulate(jax.random.PRNGKey(0),

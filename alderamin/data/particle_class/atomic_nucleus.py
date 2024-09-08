@@ -20,5 +20,5 @@ class AtomicNucleus:
         return prd.elements.symbol(self.name).number
 
 
-h = AtomicNucleus('Li', 1)
+h = AtomicNucleus("Li", 1)
 print(h.charge)

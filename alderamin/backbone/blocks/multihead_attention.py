@@ -1,7 +1,9 @@
 import flax.linen as nn
 import jax.numpy as jnp
 import jax
-from alderamin.backbone.blocks.memory_efficient_attention import MemoryEfficientAttention
+from alderamin.backbone.blocks.memory_efficient_attention import (
+    MemoryEfficientAttention,
+)
 from einops import rearrange
 
 
@@ -49,8 +51,9 @@ class MultiHeadCrossAttention(nn.Module):
                 param_dtype=self.param_dtype,
             )(x)
         else:
-            x = nn.LayerNorm(dtype=self.computation_dtype,
-                             param_dtype=self.param_dtype)(x)
+            x = nn.LayerNorm(
+                dtype=self.computation_dtype, param_dtype=self.param_dtype
+            )(x)
         shape = x.shape
 
         if self.use_memory_efficient_attention:
@@ -79,6 +82,12 @@ class MultiHeadCrossAttention(nn.Module):
         return x
 
 
-print(MultiHeadCrossAttention(512, 8).tabulate(jax.random.PRNGKey(0), jnp.ones((5, 2, 512), dtype=jnp.float16),
-                                 False,
-                                 depth=1, console_kwargs={'width':150}))
+print(
+    MultiHeadCrossAttention(512, 8).tabulate(
+        jax.random.PRNGKey(0),
+        jnp.ones((5, 2, 512), dtype=jnp.float16),
+        False,
+        depth=1,
+        console_kwargs={"width": 150},
+    )
+)

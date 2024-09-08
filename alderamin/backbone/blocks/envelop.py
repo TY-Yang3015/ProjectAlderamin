@@ -25,16 +25,30 @@ class Envelop(nn.Module):
     param_dtype: jnp.dtype = jnp.float32
 
     def setup(self) -> None:
-        self.pi_kiI = self.param("pi_kiI", nn.initializers.ones, (self.num_of_determinants
-                                                                  , self.num_of_electrons, self.num_of_nucleus))
-        self.sigma_kiI = self.param("omega_kiI", nn.initializers.ones, (self.num_of_determinants,
-                                                                        self.num_of_electrons, self.num_of_nucleus))
+        self.pi_kiI = self.param(
+            "pi_kiI",
+            nn.initializers.ones,
+            (self.num_of_determinants, self.num_of_electrons, self.num_of_nucleus),
+        )
+        self.sigma_kiI = self.param(
+            "omega_kiI",
+            nn.initializers.ones,
+            (self.num_of_determinants, self.num_of_electrons, self.num_of_nucleus),
+        )
 
-        self.weights = self.param("weights", nn.initializers.ones, (self.num_of_determinants,
-                                                                    self.num_of_determinants * self.num_of_electrons,
-                                                                    self.num_of_electrons))
+        self.weights = self.param(
+            "weights",
+            nn.initializers.ones,
+            (
+                self.num_of_determinants,
+                self.num_of_determinants * self.num_of_electrons,
+                self.num_of_electrons,
+            ),
+        )
 
-    def __call__(self, elec_nuc_features: jnp.ndarray, psiformer_pre_det: jnp.ndarray) -> jnp.ndarray:
+    def __call__(
+        self, elec_nuc_features: jnp.ndarray, psiformer_pre_det: jnp.ndarray
+    ) -> jnp.ndarray:
         """
         :param elec_nuc_features: jnp.ndarray contains electron-nuclear distance with dimension (batch,
                                   num_of_electrons, num_of_nucleus, 1).
@@ -45,18 +59,35 @@ class Envelop(nn.Module):
 
         assert psiformer_pre_det.ndim == 3, "psiformer_pre_det must be 3d tensor."
 
-        weighted_feature = jnp.einsum('bip,kpj->bkij', psiformer_pre_det, self.weights,
-                                      preferred_element_type=self.computation_dtype)
+        weighted_feature = jnp.einsum(
+            "bip,kpj->bkij",
+            psiformer_pre_det,
+            self.weights,
+            preferred_element_type=self.computation_dtype,
+        )
 
-        exponent = -jnp.einsum('kiI,bjI1->bkijI', self.sigma_kiI, elec_nuc_features,
-                               preferred_element_type=self.computation_dtype)
-        matrix_element_omega = jnp.einsum("kiI,bkijI->bkij", self.pi_kiI, jnp.exp(exponent),
-                                          preferred_element_type=self.computation_dtype)
+        exponent = -jnp.einsum(
+            "kiI,bjI1->bkijI",
+            self.sigma_kiI,
+            elec_nuc_features,
+            preferred_element_type=self.computation_dtype,
+        )
+        matrix_element_omega = jnp.einsum(
+            "kiI,bkijI->bkij",
+            self.pi_kiI,
+            jnp.exp(exponent),
+            preferred_element_type=self.computation_dtype,
+        )
 
-        determinants = jnp.einsum('bkij,bkij->bk', weighted_feature, matrix_element_omega,
-                                  preferred_element_type=self.computation_dtype)
+        determinants = jnp.einsum(
+            "bkij,bkij->bk",
+            weighted_feature,
+            matrix_element_omega,
+            preferred_element_type=self.computation_dtype,
+        )
 
         return jnp.expand_dims(determinants.sum(axis=-1), -1)
+
 
 # import jax
 
