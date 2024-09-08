@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alderamin"
+version = "0.1.0"
+description = "Flax-based implementation of Psiformer and its variants"
+requires-python = "<3.11"
+license = {text = "Mozilla Public License Version 2.0"}
+dependencies = [
+    "tensorflow",
+    "jax[cuda12]",
+    "jaxlib",
+    "pillow",
+    "hydra-core",
+    "optax",
+    "flax",
+    "einops",
+    "clu",
+    "tensorflow_datasets",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "tqdm",
+    "matplotlib",
+    "periodictable"
+]
+
+[tool.setuptools]
+package-dir = {"" = "alderamin"}
+include-package-data = true
+zip-safe = true
+
+[tool.setuptools.packages.find]
+where = ["alderamin"]
