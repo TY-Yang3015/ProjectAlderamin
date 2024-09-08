@@ -20,6 +20,3 @@ class AtomicNucleus:
         return prd.elements.symbol(self.name).number
 
     spin: int = 0
-
-
-

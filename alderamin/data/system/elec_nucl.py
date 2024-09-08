@@ -6,7 +6,9 @@ from alderamin.data.system import QuantumSystem
 
 @attr.s
 class ElectronNucleusSystem(QuantumSystem):
-    system_nucleus: AtomicNucleus = attr.ib(validator=attr.validators.instance_of(AtomicNucleus))
+    system_nucleus: AtomicNucleus = attr.ib(
+        validator=attr.validators.instance_of(AtomicNucleus)
+    )
     num_electrons: int = attr.ib(validator=attr.validators.instance_of(int))
 
     system_member: list = attr.ib(factory=list)
@@ -34,12 +36,16 @@ class ElectronNucleusSystem(QuantumSystem):
             raise ValueError("no electron given.")
         elif electron_counter % 2 == 0:
             if total_spin != 0:
-                raise ValueError("total spin must be zero for the ground "
-                                 "state of even-number electron system.")
+                raise ValueError(
+                    "total spin must be zero for the ground "
+                    "state of even-number electron system."
+                )
         elif electron_counter % 2 == 1:
             if abs(total_spin) != 1:
-                raise ValueError("total spin must be one for the ground "
-                                 "state of odd-number electron system.")
+                raise ValueError(
+                    "total spin must be one for the ground "
+                    "state of odd-number electron system."
+                )
 
         return self
 
@@ -69,12 +75,15 @@ class ElectronNucleusSystem(QuantumSystem):
 
     @property
     def summary(self) -> dict:
-        return {"total_spin": self.total_spin,
-                "total_charge": self.total_charge,
-                "total_electrons": self.total_electrons,
-                "total_nucleus": self.total_nucleus,
-                "nucleus_list": self.nucleus_list,
-                "electrons_list": self.electrons_list}
+        return {
+            "total_spin": self.total_spin,
+            "total_charge": self.total_charge,
+            "total_electrons": self.total_electrons,
+            "total_nucleus": self.total_nucleus,
+            "nucleus_list": self.nucleus_list,
+            "electrons_list": self.electrons_list,
+        }
+
 
 # a = AtomicNucleus('Li', (0, 0, 0))
 # c = ElectronNucleusSystem(system_nucleus=a,

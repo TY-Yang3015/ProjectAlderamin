@@ -32,12 +32,14 @@ class GlobalSystem(QuantumSystem):
 
     @property
     def summary(self) -> dict:
-        return {"total_spin": self.total_spin,
-                "total_charge": self.total_charge,
-                "total_electrons": self.total_electrons,
-                "total_nucleus": self.total_nucleus,
-                "nucleus_list": self.nucleus_list,
-                "electrons_list": self.electrons_list}
+        return {
+            "total_spin": self.total_spin,
+            "total_charge": self.total_charge,
+            "total_electrons": self.total_electrons,
+            "total_nucleus": self.total_nucleus,
+            "nucleus_list": self.nucleus_list,
+            "electrons_list": self.electrons_list,
+        }
 
     def initialize_system(self):
         if abs(self.total_spin) not in [0, 1]:
