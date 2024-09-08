@@ -1,10 +1,14 @@
 import attr
-import periodictable as prd
 
 
-@attr.s(frozen=True)
+def spin_validator(instance, attribute, value):
+    if value not in [1, -1]:
+        return ValueError('spin must be either -1 or 1.')
+
+
+@attr.s
 class Electron:
-    position: (float, float, float) = attr.ib()
+    spin: int = attr.ib(validator=spin_validator)
 
     charge: int = -1
     mass: int = 1

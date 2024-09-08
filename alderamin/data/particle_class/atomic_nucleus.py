@@ -19,6 +19,7 @@ class AtomicNucleus:
     def charge(self) -> int:
         return prd.elements.symbol(self.name).number
 
+    spin: int = 0
 
-h = AtomicNucleus("Li", 1)
-print(h.charge)
+
+
