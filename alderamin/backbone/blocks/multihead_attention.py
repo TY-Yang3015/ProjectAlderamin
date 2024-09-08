@@ -58,7 +58,7 @@ class MultiHeadCrossAttention(nn.Module):
                 query_dim=shape[-1],
                 heads=self.num_heads,
                 dim_head=self.output_channels,
-                dropout=self.dropout_rate if self.use_dropout else 0.0,
+                dropout=0 if self.use_dropout is False else self.dropout_rate,
                 dtype=self.computation_dtype,
             )(x, deterministic=not train, context=context)
         else:

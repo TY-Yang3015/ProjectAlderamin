@@ -4,7 +4,7 @@ import jax.numpy as jnp
 
 class SimpleJastrow(nn.Module):
     """
-    make the electron-electron jastrow factor. see the
+    make the electron-electron jastrow factor which satisfies the electron-electron cusp condition. see the
     https://arxiv.org/abs/2211.13672 PsiFormer paper for more details.
     """
     def setup(self):
@@ -21,8 +21,8 @@ class SimpleJastrow(nn.Module):
         :return: the electron-electron jastrow factors with dimension (batch, 1).
         """
 
-        parallel_term = 0
-        anti_term = 0
+        parallel_term = 0.
+        anti_term = 0.
 
         for i in range(x.shape[1]):
             for j in range(i):

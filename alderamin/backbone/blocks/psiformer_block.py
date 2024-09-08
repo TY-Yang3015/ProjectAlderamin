@@ -4,9 +4,9 @@ import jax.numpy as jnp
 from alderamin.backbone.blocks import MultiHeadCrossAttention
 
 
-class PsiformerBlock(nn.Module):
+class PsiFormerBlock(nn.Module):
     """
-    this is the building block for Psiformer electron-nucleus pipeline. contains the
+    this is the building block for psiformer electron-nucleus pipeline. contains the
     multi-head attention block and linear projection layer with residual connection.
     see https://arxiv.org/abs/2211.13672 for the paper.
 
@@ -54,8 +54,7 @@ class PsiformerBlock(nn.Module):
 
         return h
 
-
-import jax
-print(PsiformerBlock(4, False).tabulate(jax.random.PRNGKey(0),
-                                       jnp.ones((4096, 5, 4)),
-                                       depth=1, console_kwargs={'width': 150}))
+# import jax
+# print(PsiformerBlock(4, False).tabulate(jax.random.PRNGKey(0),
+#                                       jnp.ones((4096, 5, 4)),
+#                                       depth=1, console_kwargs={'width': 150}))
