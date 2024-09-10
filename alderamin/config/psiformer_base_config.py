@@ -1,0 +1,96 @@
+from dataclasses import dataclass, field
+import jax.numpy as jnp
+
+from alderamin.data import GlobalSystem
+
+
+@dataclass
+class Hyperparams:
+    learning_rate: float | str = 0.1
+    batch_size: int = 512
+    step: int = 149999
+    gradient_clipping: float = 0.1
+
+    burn_in_steps: int | None = 100
+    sample_steps: int = 10
+
+    save_ckpt: bool = True
+    ckpt_freq: int = 1000
+    eval_freq: int = 1
+
+    load_ckpt_dir: str | None = None
+    load_config: bool = True
+    ckpt_step: int | None = None
+
+
+@dataclass
+class SamplerSpec:
+    system: GlobalSystem | None = None
+    _target_: str = "alderamin.sampler.MetropolisHastingSampler"
+    batch_size: int = Hyperparams.batch_size
+    sampling_seed: int = 43
+    target_acceptance: float = 0.7
+    init_width: float = 0.1
+    sample_width: float = 0.01
+    sample_width_adapt_freq: int = 100
+    computation_dtype: str = "float32"
+
+
+@dataclass
+class PsiFormerSpec:
+    num_of_determinants: int = 6
+    num_of_blocks: int = 5
+    num_heads: int = 8
+    use_memory_efficient_attention: bool = False
+    group: None | int = None
+
+    computation_dtype: str = "float32"
+    param_dtype: str = "float32"
+
+    num_of_electrons: int = 0
+    num_of_nucleus: int = 0
+
+    def initialize(self, sampler_spec: SamplerSpec):
+        if sampler_spec.system is None:
+            raise ValueError("System in SamplerSpec must be initialized before PsiFormerSpec.")
+        self.num_of_electrons = sampler_spec.system.total_electrons
+        self.num_of_nucleus = sampler_spec.system.total_nucleus
+
+
+@dataclass
+class PsiFormerConfig:
+    hyperparams: Hyperparams = field(default_factory=Hyperparams)
+    sampler_spec: SamplerSpec = field(default_factory=SamplerSpec)
+    nn_spec: PsiFormerSpec = field(default_factory=PsiFormerSpec)
+
+    def initialize(self):
+        self.nn_spec.initialize(self.sampler_spec)
+        return self
+
+
+"""
+import hydra
+
+from alderamin.data import GlobalSystem, AtomicNucleus, ElectronNucleusSystem
+
+a = AtomicNucleus('Li', (0, 0, 0))
+c = ElectronNucleusSystem(system_nucleus=a,
+                          num_electrons=3).initialize_system()
+b = AtomicNucleus('H', (0, 0, 1))
+d = ElectronNucleusSystem(system_nucleus=b,
+                          num_electrons=18).initialize_system()
+
+e = GlobalSystem(system_member=[c, d]).initialize_system()
+p = PsiFormerConfig()
+p.sampler_spec.system = e
+
+
+@hydra.main(version_base=None)
+def execute(config: PsiFormerConfig) -> None:
+    config.initialize()
+    print(config.sampler_spec.system.summary)
+
+
+if __name__ == "__main__":
+    execute(p)
+"""

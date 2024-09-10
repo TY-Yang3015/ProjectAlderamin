@@ -15,14 +15,14 @@ class PsiFormer(nn.Module):
     use_memory_efficient_attention: bool = False
     group: None | int = None
 
-    computation_dtype: jnp.dtype = jnp.float16
-    param_dtype: jnp.dtype = jnp.float16
+    computation_dtype: jnp.dtype | str = "float32"
+    param_dtype: jnp.dtype | str = "float32"
 
     @nn.compact
     def __call__(
-        self,
-        electron_nuclear_features: jnp.ndarray,
-        single_electron_features: jnp.ndarray,
+            self,
+            electron_nuclear_features: jnp.ndarray,
+            single_electron_features: jnp.ndarray,
     ) -> jnp.ndarray:
         """
         :param electron_nuclear_features: the electronic nuclear features tensor, should have the shape
@@ -72,9 +72,9 @@ class PsiFormer(nn.Module):
 # import jax
 
 # print(PsiFormer(num_of_determinants=6,
-#                num_of_electrons=5,
-#                num_of_nucleus=3,
+#                num_of_electrons=2,
+#                num_of_nucleus=2,
 #                num_of_blocks=5,
-#                num_heads=32).tabulate(jax.random.PRNGKey(0),
-#                                       jnp.ones((4096, 5, 3, 4)), jnp.ones((4096, 5, 4)),
+#                num_heads=8).tabulate(jax.random.PRNGKey(0),
+#                                       jnp.ones((512, 2, 2, 4)), jnp.ones((512, 2, 4)),
 #                                       depth=1, console_kwargs={'width': 150}))

@@ -41,6 +41,14 @@ class GlobalSystem(QuantumSystem):
             "electrons_list": self.electrons_list,
         }
 
+    @property
+    def electron_to_nucleus(self) -> list:
+        electron_to_nucleus = []
+        for i in range(self.total_nucleus):
+            for j in range(self.system_member[i].num_electrons):
+                electron_to_nucleus.append(i)
+        return electron_to_nucleus
+
     def initialize_system(self):
         if abs(self.total_spin) not in [0, 1]:
             spin_list = []
@@ -81,6 +89,8 @@ class GlobalSystem(QuantumSystem):
 # b = AtomicNucleus('H', (0, 0, 1))
 # d = ElectronNucleusSystem(system_nucleus=b,
 #                          num_electrons=1).initialize_system()
-# e = GlobalSystem(system_member=[c, d]).initialize_system()
-# print(e.system_member)
+# f = AtomicNucleus('Ga', (0, 0, 1))
+# G = ElectronNucleusSystem(system_nucleus=b,
+#                          num_electrons=10).initialize_system()
+# e = GlobalSystem(system_member=[c, d, G]).initialize_system()
 # print(e.summary)

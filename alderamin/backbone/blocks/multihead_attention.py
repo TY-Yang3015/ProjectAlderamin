@@ -82,12 +82,12 @@ class MultiHeadCrossAttention(nn.Module):
         return x
 
 
-print(
-    MultiHeadCrossAttention(512, 8).tabulate(
-        jax.random.PRNGKey(0),
-        jnp.ones((5, 2, 512), dtype=jnp.float16),
-        False,
-        depth=1,
-        console_kwargs={"width": 150},
-    )
-)
+#print(
+#    MultiHeadCrossAttention(512, 8).tabulate(
+#        jax.random.PRNGKey(0),
+#        jnp.ones((5, 2, 512), dtype=jnp.float16),
+#        False,
+#        depth=1,
+#        console_kwargs={"width": 150},
+#    )
+#)
