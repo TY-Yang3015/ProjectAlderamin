@@ -34,7 +34,7 @@ class PsiFormerBlock(nn.Module):
             output_channels=x.shape[-1],
             use_memory_efficient_attention=self.use_memory_efficient_attention,
             group=self.group,
-            use_qkv_bias=True,
+            use_qkv_bias=False,
             use_dropout=False,
             computation_dtype=self.computation_dtype,
             param_dtype=self.param_dtype,
@@ -51,6 +51,7 @@ class PsiFormerBlock(nn.Module):
             nn.Dense(
                 features=x.shape[-1],
                 use_bias=True,
+                bias_init=nn.initializers.normal(stddev=0.1),
                 dtype=self.computation_dtype,
                 param_dtype=self.param_dtype,
             )(h)

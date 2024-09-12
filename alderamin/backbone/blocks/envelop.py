@@ -1,12 +1,13 @@
 import flax.linen as nn
 import jax.numpy as jnp
 
+from einops import rearrange
+
 
 class Envelop(nn.Module):
     """
     the exponential-decaying envelop to satisfy the vanishing condition of the wavefunction
-    at infinity, with two sets of learnable parameters. The weight matrix is included in this
-    class as well.
+    at infinity, with two sets of learnable parameters.
 
     :cvar num_of_determinants: the number of determinants for psiformer before multiplying to the
                                jastrow factor.
@@ -32,18 +33,8 @@ class Envelop(nn.Module):
         )
         self.sigma_kiI = self.param(
             "omega_kiI",
-            nn.initializers.ones,
+            nn.initializers.normal(stddev=0.01),
             (self.num_of_determinants, self.num_of_electrons, self.num_of_nucleus),
-        )
-
-        self.weights = self.param(
-            "weights",
-            nn.initializers.ones,
-            (
-                self.num_of_determinants,
-                self.num_of_determinants * self.num_of_electrons,
-                self.num_of_electrons,
-            ),
         )
 
     def __call__(
@@ -59,34 +50,43 @@ class Envelop(nn.Module):
 
         assert psiformer_pre_det.ndim == 3, "psiformer_pre_det must be 3d tensor."
 
-        weighted_feature = jnp.einsum(
-            "bip,kpj->bkij",
-            psiformer_pre_det,
-            self.weights,
-            preferred_element_type=self.computation_dtype,
-        )
+        psiformer_pre_det = psiformer_pre_det.reshape(psiformer_pre_det.shape[0],
+                                                      self.num_of_electrons, self.num_of_electrons,
+                                                      self.num_of_determinants)
+        psiformer_pre_det = rearrange(psiformer_pre_det, "b i j k -> b k i j")
 
-        exponent = -jnp.einsum(
-            "kiI,bjI1->bkijI",
+        exponent = jnp.einsum(
+            "kiI,bjI1->kijI",
             self.sigma_kiI,
             elec_nuc_features,
             preferred_element_type=self.computation_dtype,
         )
+
         matrix_element_omega = jnp.einsum(
-            "kiI,bkijI->bkij",
+            "kiI,kijI->kij",
             self.pi_kiI,
-            jnp.exp(exponent),
+            jnp.exp(-exponent),
             preferred_element_type=self.computation_dtype,
         )
 
         determinants = jnp.einsum(
-            "bkij,bkij->bk",
-            weighted_feature,
+            "bkij,kij->bkij",
+            psiformer_pre_det,
             matrix_element_omega,
             preferred_element_type=self.computation_dtype,
         )
 
-        return jnp.expand_dims(determinants.sum(axis=-1), -1)
+        determinants = jnp.clip(determinants, -10000, 10000)
+
+        sign, logabsdet = jnp.linalg.slogdet(determinants)
+
+        log_abs_wavefunction = jnp.log(
+            jnp.abs(
+                jnp.expand_dims((jnp.exp(logabsdet) * sign).sum(axis=-1), -1)
+            )
+        )
+
+        return log_abs_wavefunction
 
 
 # import jax

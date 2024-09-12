@@ -6,13 +6,18 @@ from alderamin.data import GlobalSystem
 
 @dataclass
 class Hyperparams:
-    learning_rate: float | str = 0.1
-    batch_size: int = 512
-    step: int = 149999
-    gradient_clipping: float = 0.1
+    learning_rate: float | str = 0.05
+    batch_size: int = 4096
+    step: int = 2000
+    training_seed = 114514
+    gradient_clipping: float = 1e-3
+    log_epsilon = 1E-12
 
-    burn_in_steps: int | None = 100
+    burn_in_steps: int | None = 1000
     sample_steps: int = 10
+
+    mad_clipping_factor: int = 3
+    scale_input: bool = False
 
     save_ckpt: bool = True
     ckpt_freq: int = 1000
@@ -26,29 +31,29 @@ class Hyperparams:
 @dataclass
 class SamplerSpec:
     system: GlobalSystem | None = None
-    _target_: str = "alderamin.sampler.MetropolisHastingSampler"
     batch_size: int = Hyperparams.batch_size
-    sampling_seed: int = 43
-    target_acceptance: float = 0.7
-    init_width: float = 0.1
-    sample_width: float = 0.01
+    sampling_seed: int = 114514
+    target_acceptance: float = 0.9
+    init_width: float = 1
+    sample_width: float = 0.02
     sample_width_adapt_freq: int = 100
     computation_dtype: str = "float32"
 
 
 @dataclass
 class PsiFormerSpec:
-    num_of_determinants: int = 6
-    num_of_blocks: int = 5
-    num_heads: int = 8
-    use_memory_efficient_attention: bool = False
+    num_of_determinants: int = 16
+    num_of_blocks: int = 4
+    num_heads: int = 4
+    qkv_size: int = 64
+    use_memory_efficient_attention: bool = True
     group: None | int = None
 
     computation_dtype: str = "float32"
     param_dtype: str = "float32"
 
-    num_of_electrons: int = 0
-    num_of_nucleus: int = 0
+    num_of_electrons: int = 2
+    num_of_nucleus: int = 2
 
     def initialize(self, sampler_spec: SamplerSpec):
         if sampler_spec.system is None:

@@ -2,17 +2,14 @@ import jax
 import jax.numpy as jnp
 import jax.random as random
 from flax.training.train_state import TrainState
-from jax import vmap, pmap, lax
 from flax import struct
+from einops import repeat
 from functools import partial
 from tqdm import tqdm
 
-from alderamin.data import GlobalSystem, AtomicNucleus, ElectronNucleusSystem
-
-from einops import rearrange
+from alderamin.data import GlobalSystem
 
 
-# TODO: organise import
 # TODO: numerical precision control
 
 @struct.dataclass
@@ -38,11 +35,15 @@ class MetropolisHastingSampler:
                  init_width: float,
                  sample_width: float,
                  sample_width_adapt_freq: int,
-                 computation_dtype: jnp.dtype | str = "float32"
+                 log_epsilon: jnp.float32 = 1e-12,
+                 scale_input: bool = True,
+                 computation_dtype: jnp.dtype | str = "float32",
                  ):
         self.num_of_electrons: int = system.total_electrons
-        self.nuc_positions: jnp.ndarray = jnp.array([member.position for member in system.nucleus_list])
-        self.spins: jnp.ndarray = jnp.array([electron.spin for electron in system.electrons_list])
+        self.nuc_positions: jnp.ndarray = jnp.array([member.position for member in system.nucleus_list],
+                                                    dtype=computation_dtype)
+        self.spins: jnp.ndarray = jnp.array([electron.spin for electron in system.electrons_list],
+                                            dtype=computation_dtype)
 
         self.batch_size: int = batch_size
         self.num_of_walkers: int = self.batch_size
@@ -53,8 +54,11 @@ class MetropolisHastingSampler:
         self.sample_width: float = sample_width
         self.sample_width_adapt_freq: int = sample_width_adapt_freq
         self.computation_dtype: jnp.dtype = computation_dtype
+        self.log_epsilon: float = log_epsilon
+        self.scale_input: bool = scale_input
 
-        self.electron_nuc_pair: jnp.ndarray = jnp.array(system.electron_to_nucleus)
+        self.electron_nuc_pair: jnp.ndarray = jnp.array(system.electron_to_nucleus,
+                                                        dtype=jnp.int32)
 
         self.critical_key: random.PRNGKey = random.PRNGKey(sampling_seed * 42)
 
@@ -65,7 +69,7 @@ class MetropolisHastingSampler:
     def initialise_walkers(self) -> WalkerState:
         init_positions: jnp.ndarray = random.normal(self.sampling_key,
                                                     shape=(self.num_of_walkers, self.num_of_electrons, 3)
-                                                    ) * self.init_width
+                                                    , dtype=self.computation_dtype) * self.init_width
 
         nuc_pos_array: jnp.ndarray = self.nuc_positions[self.electron_nuc_pair]
         nuc_pos_array = jnp.tile(nuc_pos_array, (self.num_of_walkers, 1, 1))
@@ -74,7 +78,8 @@ class MetropolisHastingSampler:
         self.sampling_key, _ = random.split(self.sampling_key)
         return WalkerState(
             positions=init_positions,
-            step_size=jnp.ones((self.num_of_walkers, 1, 1)) * self.sample_width,
+            step_size=jnp.ones((self.num_of_walkers, 1, 1),
+                               dtype=self.computation_dtype) * self.sample_width,
             key=random.PRNGKey(*random.randint(self.sampling_key, (1,), -1e5, 1e5)),
         )
 
@@ -92,27 +97,25 @@ class MetropolisHastingSampler:
         Returns:
         - log_probs: Log probabilities with shape (4096, 7) (jnp array).
         """
-        # Get dimensions for clarity
         batch_size, n_points, dim = x.shape
 
-        # Subtract the mean from each point (broadcasting mu over the first two dimensions)
-        diff = x - mu  # Shape: (4096, 7, 3)
+        diff = x - mu  # (batch, electron, dim)
 
-        # Calculate the log determinant of the covariance matrix
+        # calculate the log det of the covariance
         sign, logdet = jnp.linalg.slogdet(sigma)
 
-        # Solve for the Mahalanobis distance for each data point
+        # solve for the Mahalanobis distance
         # TODO: remove inverse for stability
         sigma_inv = jnp.linalg.inv(sigma)
-        mahalanobis_term = jnp.einsum('ijk,kl,ijl->ij', diff, sigma_inv, diff)  # Shape: (4096, 7)
+        mahalanobis_term = jnp.einsum('ijk,kl,ijl->ij', diff, sigma_inv, diff)  # (batch, electrons)
 
-        # Compute the log probability for each point
-        log_probs = -0.5 * (3 * jnp.log(2 * jnp.pi) + logdet + mahalanobis_term)  # Shape: (4096, 7)
+        # compute the log probability
+        log_probs = -0.5 * (3 * jnp.log(2 * jnp.pi) + logdet + mahalanobis_term)  # (batch, electrons)
 
         return log_probs
 
     def _burn_in_distribution(self, x: jnp.ndarray) -> jnp.ndarray:
-        log_probs = jnp.zeros(shape=self.batch_size)
+        log_probs = jnp.zeros(shape=self.batch_size, dtype=self.computation_dtype)
         for nuc_pos in self.nuc_positions:
             log_probs += self.log_multivariate_gaussian(x, nuc_pos,
                                                         jnp.eye(3) * self.init_width).prod(axis=-1)
@@ -122,8 +125,8 @@ class MetropolisHastingSampler:
     def _burn_in_step(self, walker_state: WalkerState) -> tuple[WalkerState, jnp.ndarray]:
         walker_state, proposed_positions = walker_state.propose()
 
-        current_log_prob = self._burn_in_distribution(walker_state.positions)
-        proposed_log_prob = self._burn_in_distribution(proposed_positions)
+        current_log_prob = 2. * self._burn_in_distribution(walker_state.positions)
+        proposed_log_prob = 2. * self._burn_in_distribution(proposed_positions)
 
         accept_probs = jnp.exp(proposed_log_prob - current_log_prob)
         accept_probs = jnp.minimum(accept_probs, 1.0)
@@ -134,7 +137,8 @@ class MetropolisHastingSampler:
     def _mh_accept_step(self, walker_state: WalkerState,
                         accept_probs: jnp.ndarray,
                         new_positions: jnp.ndarray) -> tuple[WalkerState, jnp.ndarray]:
-        accept_decisions = random.uniform(walker_state.key, shape=(walker_state.positions.shape[0], )) < accept_probs
+        accept_decisions = random.uniform(walker_state.key, shape=(walker_state.positions.shape[0],)
+                                          , dtype=self.computation_dtype) < accept_probs
         updated_positions = jnp.where(accept_decisions[:, None, None], new_positions, walker_state.positions)
         return walker_state.replace(positions=updated_positions), accept_decisions
 
@@ -162,36 +166,62 @@ class MetropolisHastingSampler:
                                psiformer_train_state: TrainState) -> tuple[WalkerState, jnp.ndarray]:
         walker_state, proposed_positions = walker_state.propose()
 
-        psiformer_input = self.convert_to_psiformer_input(walker_state.positions)
+        current_input = self.convert_to_psiformer_input(walker_state.positions)
         proposal_input = self.convert_to_psiformer_input(proposed_positions)
-        current_log_prob = jnp.log(psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
-                                                                  , *psiformer_input))
-        proposed_log_prob = jnp.log(psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
-                                                                   , *proposal_input))
 
-        accept_probs = jnp.exp(proposed_log_prob - current_log_prob)
-        accept_probs = jnp.minimum(accept_probs, 1.0).squeeze(-1)
+        current_log_prob = (
+                2. * (psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
+                                                     , *current_input)))
+        proposed_log_prob = (
+                2. * (psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
+                                                     , *proposal_input)))
+        log_ratio = proposed_log_prob - current_log_prob
+
+        accept_probs = jnp.exp(log_ratio)
+
+        # mean_absolute_deviation = jnp.mean(jnp.abs(accept_probs - jnp.median(accept_probs)))
+        # n = 0.001
+        # accept_probs = jnp.clip(accept_probs,
+        #                        accept_probs - (n * mean_absolute_deviation),
+        #                        accept_probs + (n * mean_absolute_deviation))
+
+        # print(accept_probs.mean())
+
+        accept_probs = jnp.minimum(accept_probs, jnp.ones_like(accept_probs)).squeeze(-1)
 
         walker_state, decisions = self._mh_accept_step(walker_state, accept_probs, proposed_positions)
         return walker_state, decisions
+
+    def _mh_accept_step_psiformer(self, walker_state: WalkerState,
+                                  accept_probs: jnp.ndarray,
+                                  new_positions: jnp.ndarray) -> tuple[WalkerState, jnp.ndarray]:
+        accept_decisions = random.uniform(walker_state.key, shape=(walker_state.positions.shape[0],)
+                                          , dtype=self.computation_dtype) < accept_probs
+        updated_positions = jnp.where(accept_decisions[:, None, None], new_positions, walker_state.positions)
+        return walker_state.replace(positions=updated_positions), accept_decisions
 
     @partial(jax.jit, static_argnums=0)
     def convert_to_psiformer_input(self, coordinates: jnp.ndarray) \
             -> (jnp.ndarray, jnp.ndarray):
         """
 
-        :param coordinates: sampled cartesian coordinates, with shape (batch, N, 3)
-        :return:
-        """
+                :param coordinates: sampled cartesian coordinates, with shape (batch, N, 3)
+                :return:
+                """
+        if coordinates.ndim == 2:
+            coordinates = coordinates[None, ...]
+
+        assert coordinates.ndim == 3
+
         batch = coordinates.shape[0]
         electron_nuclear_features = jnp.zeros((batch, self.num_of_electrons,
                                                len(self.nuc_positions), 4),
                                               dtype=self.computation_dtype)
-        single_electron_features = jnp.zeros((batch, self.num_of_electrons, 4),
-                                             dtype=self.computation_dtype)
 
-        single_electron_features = single_electron_features.at[..., :3].set(coordinates)
-        single_electron_features = single_electron_features.at[:, :, -1].set(self.spins)
+        spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} e 1")
+        single_electron_features = coordinates
+        single_electron_features = jnp.concatenate([single_electron_features,
+                                                    spins_reshaped], axis=-1)
 
         for i in range(self.num_of_electrons):
             for j in range(len(self.nuc_positions)):
@@ -201,6 +231,18 @@ class MetropolisHastingSampler:
                 electron_nuclear_features = electron_nuclear_features.at[:, i, j, -1].set(
                     jnp.linalg.norm(coordinates[:, i, :] - self.nuc_positions[j, :], axis=-1)
                 )
+
+        spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} "
+                                            f"e {len(self.nuc_positions)} 1")
+
+        electron_nuclear_features = jnp.concatenate([electron_nuclear_features,
+                                                     spins_reshaped], axis=-1)
+
+        if self.scale_input:
+            electron_nuclear_features = electron_nuclear_features.at[:, :, :, :4].set(
+                electron_nuclear_features[:, :, :, :4] *
+                jnp.expand_dims((jnp.log(1. + electron_nuclear_features[..., 3])
+                                 / electron_nuclear_features[..., 3]), 3))
 
         return electron_nuclear_features, single_electron_features
 
@@ -214,12 +256,15 @@ class MetropolisHastingSampler:
 
 
 """
-a = AtomicNucleus('Li', (0, 0, 0))
+from einops import rearrange
+from alderamin.data import AtomicNucleus, ElectronNucleusSystem
+
+a = AtomicNucleus('H', (0, 0, 0))
 c = ElectronNucleusSystem(system_nucleus=a,
                           num_electrons=3).initialize_system()
 b = AtomicNucleus('H', (0, 0, 1))
 d = ElectronNucleusSystem(system_nucleus=b,
-                          num_electrons=18).initialize_system()
+                          num_electrons=3).initialize_system()
 
 e = GlobalSystem(system_member=[c, d]).initialize_system()
 
@@ -232,7 +277,7 @@ sampler = MetropolisHastingSampler(
     sample_width=0.001,
     sample_width_adapt_freq=100,
 )
-result = sampler.burn_in(2000)
+result = sampler.burn_in(20000)
 
 print(result.shape)
 print(sampler.convert_to_psiformer_input(result)[0].shape)
@@ -247,4 +292,4 @@ ax.plot(result[:, 0], result[:, 1], 'r.')
 ax.set_xlim(-0.7, 0.7)
 ax.set_ylim(-0.2, 1.2)
 plt.show()
-"""
+#"""

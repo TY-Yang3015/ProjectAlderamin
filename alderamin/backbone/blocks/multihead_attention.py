@@ -32,7 +32,7 @@ class MultiHeadCrossAttention(nn.Module):
     num_heads: int = 4
     use_memory_efficient_attention: bool = False
     group: int | None = None
-    use_qkv_bias: bool = True
+    use_qkv_bias: bool = False
     use_dropout: bool = False
     dropout_rate: float = 0.1
 

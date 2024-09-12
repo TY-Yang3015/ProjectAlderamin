@@ -9,8 +9,8 @@ class SimpleJastrow(nn.Module):
     """
 
     def setup(self):
-        self.alpha_parallel = self.param("alpha_parallel", nn.initializers.zeros, 1)
-        self.alpha_anti = self.param("alpha_anti", nn.initializers.zeros, 1)
+        self.alpha_parallel = self.param("alpha_parallel", nn.initializers.ones, (1, ))
+        self.alpha_anti = self.param("alpha_anti", nn.initializers.ones, (1, ))
 
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
         """
@@ -22,8 +22,8 @@ class SimpleJastrow(nn.Module):
         :return: the electron-electron jastrow factors with dimension (batch, 1).
         """
 
-        parallel_term = 0.0
-        anti_term = 0.0
+        parallel_term = 0.
+        anti_term = 0.
 
         for i in range(x.shape[1]):
             for j in range(i):
