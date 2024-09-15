@@ -13,7 +13,7 @@ def is_valid_atom(instance, attribute, value):
 @attr.s(frozen=True)
 class AtomicNucleus:
     name: str = attr.ib(validator=is_valid_atom)
-    position: tuple[float, float, float] = attr.ib(validator=instance_of(tuple))
+    position: tuple[float, float, float] = attr.ib()
 
     @property
     def charge(self) -> int:

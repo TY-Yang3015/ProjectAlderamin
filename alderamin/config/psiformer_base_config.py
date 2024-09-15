@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-import jax.numpy as jnp
 
 from alderamin.data import GlobalSystem
 

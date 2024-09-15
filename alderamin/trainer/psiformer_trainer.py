@@ -5,6 +5,7 @@ from jax import random
 from jax.lib import xla_bridge
 from functools import partial
 from einops import repeat, rearrange
+from omegaconf import OmegaConf, DictConfig
 import jax
 import logging
 import folx
@@ -12,12 +13,12 @@ import optax
 from optax_shampoo import shampoo
 
 from alderamin.backbone.models import PsiFormer
-from alderamin.config import PsiFormerConfig
+from alderamin.data import GlobalSystem
 from alderamin.sampler import MetropolisHastingSampler
 
 
 class PsiFormerTrainer:
-    def __init__(self, config: PsiFormerConfig):
+    def __init__(self, config: DictConfig, system: GlobalSystem):
         self.config = config
 
         # log environment information
@@ -28,24 +29,24 @@ class PsiFormerTrainer:
 
         # create sampler
         self.sampler = MetropolisHastingSampler(
-            system=self.config.sampler_spec.system,
-            batch_size=self.config.sampler_spec.batch_size,
-            sampling_seed=self.config.sampler_spec.sampling_seed,
-            target_acceptance=self.config.sampler_spec.target_acceptance,
-            init_width=self.config.sampler_spec.init_width,
-            sample_width=self.config.sampler_spec.sample_width,
-            sample_width_adapt_freq=self.config.sampler_spec.sample_width_adapt_freq,
-            log_epsilon=self.config.hyperparams.log_epsilon,
-            computation_dtype=self.config.sampler_spec.computation_dtype,
-            scale_input=self.config.hyperparams.scale_input,
+            system=system,
+            batch_size=self.config.hyperparam.batch_size,
+            sampling_seed=self.config.sampler.sampling_seed,
+            target_acceptance=self.config.sampler.target_acceptance,
+            init_width=self.config.sampler.init_width,
+            sample_width=self.config.sampler.sample_width,
+            sample_width_adapt_freq=self.config.sampler.sample_width_adapt_freq,
+            log_epsilon=self.config.hyperparam.log_epsilon,
+            computation_dtype=self.config.sampler.computation_dtype,
+            scale_input=self.config.hyperparam.scale_input,
         )
 
         # burn-in steps
-        if self.config.hyperparams.burn_in_steps is not None:
-            self.sampler.burn_in(self.config.hyperparams.burn_in_steps)
+        if self.config.sampler.burn_in_steps is not None:
+            self.sampler.burn_in(self.config.sampler.burn_in_steps)
 
         # make some handy alias
-        self.system = self.config.sampler_spec.system
+        self.system = system
         self.num_of_electrons = self.system.total_electrons
         self.num_of_nucleus = self.system.total_nucleus
         self.nuc_charges = jnp.array([nuc.charge for nuc in self.system.nucleus_list])
@@ -59,31 +60,33 @@ class PsiFormerTrainer:
 
         # build neural network model
         self.psiformer = PsiFormer(
-            num_of_determinants=self.config.nn_spec.num_of_determinants,
-            num_of_electrons=self.config.nn_spec.num_of_electrons,
-            num_of_nucleus=self.config.nn_spec.num_of_nucleus,
-            num_of_blocks=self.config.nn_spec.num_of_blocks,
-            num_heads=self.config.nn_spec.num_heads,
-            qkv_size=self.config.nn_spec.qkv_size,
-            use_memory_efficient_attention=self.config.nn_spec.use_memory_efficient_attention,
-            group=self.config.nn_spec.group,
-            computation_dtype=self.config.nn_spec.computation_dtype,
-            param_dtype=self.config.nn_spec.param_dtype,
+            num_of_determinants=self.config.psiformer.num_of_determinants,
+            num_of_electrons=self.system.total_electrons,
+            num_of_nucleus=self.system.total_nucleus,
+            num_of_blocks=self.config.psiformer.num_of_blocks,
+            num_heads=self.config.psiformer.num_heads,
+            qkv_size=self.config.psiformer.qkv_size,
+            use_memory_efficient_attention=self.config.psiformer.use_memory_efficient_attention,
+            group=self.config.psiformer.group,
+            computation_dtype=self.config.psiformer.computation_dtype,
+            param_dtype=self.config.psiformer.param_dtype,
             spins=self.spins,
             nuc_positions=self.nuc_positions,
-            scale_input=self.config.hyperparams.scale_input,
+            scale_input=self.config.hyperparam.scale_input,
         )
 
         # initialise optimiser
-        lr = optax.exponential_decay(init_value=self.config.hyperparams.learning_rate,
-                                     transition_steps=self.config.hyperparams.step,
-                                     transition_begin=1000,
-                                     decay_rate=0.95,
-                                     end_value=self.config.hyperparams.learning_rate / 2.)
+        lr = optax.exponential_decay(
+            init_value=self.config.hyperparam.learning_rate,
+            transition_steps=self.config.hyperparam.step,
+            transition_begin=1000,
+            decay_rate=0.95,
+            end_value=self.config.hyperparam.learning_rate / 2.0,
+        )
         self.optimiser = optax.adam(lr)
-        #self.optimiser = shampoo(self.config.hyperparams.learning_rate, block_size=128)
+        # self.optimiser = shampoo(self.config.hyperparams.learning_rate, block_size=128)
         self.optimiser = optax.chain(
-            optax.clip_by_global_norm(self.config.hyperparams.gradient_clipping),
+            optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
             self.optimiser,
             # optax.add_decayed_weights(weight_decay=1e-4),
             optax.ema(0.99),
@@ -92,9 +95,9 @@ class PsiFormerTrainer:
     @partial(jax.jit, static_argnums=0)
     def _train_step(self, batch, state):
         def get_electric_hamiltonian(coordinates: jnp.ndarray) -> jnp.ndarray:
-            elec_elec_term = jnp.zeros((self.config.hyperparams.batch_size, 1))
-            elec_nuc_term = jnp.zeros((self.config.hyperparams.batch_size, 1))
-            nuc_nuc_term = jnp.zeros((self.config.hyperparams.batch_size, 1))
+            elec_elec_term = jnp.zeros((self.config.hyperparam.batch_size, 1))
+            elec_nuc_term = jnp.zeros((self.config.hyperparam.batch_size, 1))
+            nuc_nuc_term = jnp.zeros((self.config.hyperparam.batch_size, 1))
 
             for i in range(self.num_of_electrons):
                 for j in range(i):
@@ -169,7 +172,7 @@ class PsiFormerTrainer:
             mean_absolute_deviation = jnp.mean(
                 jnp.abs(energy_batch - jnp.median(energy_batch))
             )
-            n = self.config.hyperparams.mad_clipping_factor
+            n = self.config.hyperparam.mad_clipping_factor
             energy_batch = jnp.clip(
                 energy_batch,
                 jnp.median(energy_batch) - (n * mean_absolute_deviation),
@@ -188,14 +191,14 @@ class PsiFormerTrainer:
         logging.info("initializing model.")
         init_elec = jnp.zeros(
             (
-                self.config.hyperparams.batch_size,
-                self.config.nn_spec.num_of_electrons,
+                self.config.hyperparam.batch_size,
+                self.system.total_electrons,
                 3,
             ),
             jnp.float32,
         )
 
-        rngs = {"params": random.PRNGKey(self.config.hyperparams.training_seed)}
+        rngs = {"params": random.PRNGKey(self.config.hyperparam.training_seed)}
         params = jax.jit(self.psiformer.init)(rngs, init_elec)["params"]
 
         state = TrainState.create(
@@ -204,9 +207,9 @@ class PsiFormerTrainer:
             tx=self.optimiser,
         )
 
-        for step in range(self.config.hyperparams.step):
+        for step in range(self.config.hyperparam.step):
             batch = self.sampler.sample_psiformer(
-                state, self.config.hyperparams.sample_steps
+                state, self.config.sampler.sample_steps
             )
             # batch = self.sampler.walker_state.positions
             state, energy = self._train_step(batch, state)
