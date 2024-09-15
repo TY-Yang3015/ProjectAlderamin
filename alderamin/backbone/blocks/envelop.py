@@ -1,8 +1,13 @@
 import flax.linen as nn
 import jax.numpy as jnp
 
-from einops import rearrange
+from einops import rearrange, reduce, repeat
+from jax import random
+import jax
 
+
+def custom_initializer(key, shape, dtype=jnp.float32):
+    return jax.random.normal(key, shape, dtype) * 0.05 + 1.
 
 class Envelop(nn.Module):
     """
@@ -22,19 +27,19 @@ class Envelop(nn.Module):
     num_of_electrons: int
     num_of_nucleus: int
 
-    computation_dtype: jnp.dtype = jnp.float16
+    computation_dtype: jnp.dtype = jnp.float32
     param_dtype: jnp.dtype = jnp.float32
 
     def setup(self) -> None:
         self.pi_kiI = self.param(
             "pi_kiI",
-            nn.initializers.ones,
-            (self.num_of_determinants, self.num_of_electrons, self.num_of_nucleus),
+            nn.initializers.normal(0.1),
+            (self.num_of_determinants, self.num_of_electrons, 1, self.num_of_nucleus),
         )
         self.sigma_kiI = self.param(
             "omega_kiI",
-            nn.initializers.normal(stddev=0.01),
-            (self.num_of_determinants, self.num_of_electrons, self.num_of_nucleus),
+            custom_initializer,
+            (self.num_of_determinants, self.num_of_electrons, 1, self.num_of_nucleus),
         )
 
     def __call__(
@@ -55,38 +60,21 @@ class Envelop(nn.Module):
                                                       self.num_of_determinants)
         psiformer_pre_det = rearrange(psiformer_pre_det, "b i j k -> b k i j")
 
-        exponent = jnp.einsum(
-            "kiI,bjI1->kijI",
-            self.sigma_kiI,
-            elec_nuc_features,
-            preferred_element_type=self.computation_dtype,
-        )
+        elec_nuc_features = rearrange(elec_nuc_features, f"b j I 1 -> b 1 j I ")
+        elec_nuc_features = repeat(elec_nuc_features
+                                   , f"b 1 j I -> b {self.num_of_determinants} 1 j I")  # b k 1 j I
+        exponent = (self.sigma_kiI * elec_nuc_features)  # k i 1 I, b k 1 j I -> b k i j I
 
-        matrix_element_omega = jnp.einsum(
-            "kiI,kijI->kij",
-            self.pi_kiI,
-            jnp.exp(-exponent),
-            preferred_element_type=self.computation_dtype,
-        )
+        # k i 1 I, b k i j I -> b k i j
+        matrix_element_omega = (self.pi_kiI * jnp.exp(-exponent)).sum(axis=-1)
 
-        determinants = jnp.einsum(
-            "bkij,kij->bkij",
-            psiformer_pre_det,
-            matrix_element_omega,
-            preferred_element_type=self.computation_dtype,
-        )
+        # b k i j -> b k
+        determinants = psiformer_pre_det * matrix_element_omega
 
-        determinants = jnp.clip(determinants, -10000, 10000)
+        # b k -> b 1
+        wavefunction = jnp.linalg.det(determinants).sum(axis=-1).reshape(-1, 1)
 
-        sign, logabsdet = jnp.linalg.slogdet(determinants)
-
-        log_abs_wavefunction = jnp.log(
-            jnp.abs(
-                jnp.expand_dims((jnp.exp(logabsdet) * sign).sum(axis=-1), -1)
-            )
-        )
-
-        return log_abs_wavefunction
+        return wavefunction
 
 
 # import jax

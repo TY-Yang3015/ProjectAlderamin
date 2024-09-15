@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import jax.random as random
 from flax.training.train_state import TrainState
 from flax import struct
-from einops import repeat
+from einops import repeat, rearrange
 from functools import partial
 from tqdm import tqdm
 
@@ -35,7 +35,7 @@ class MetropolisHastingSampler:
                  init_width: float,
                  sample_width: float,
                  sample_width_adapt_freq: int,
-                 log_epsilon: jnp.float32 = 1e-12,
+                 log_epsilon: float = 1e-12,
                  scale_input: bool = True,
                  computation_dtype: jnp.dtype | str = "float32",
                  ):
@@ -166,85 +166,21 @@ class MetropolisHastingSampler:
                                psiformer_train_state: TrainState) -> tuple[WalkerState, jnp.ndarray]:
         walker_state, proposed_positions = walker_state.propose()
 
-        current_input = self.convert_to_psiformer_input(walker_state.positions)
-        proposal_input = self.convert_to_psiformer_input(proposed_positions)
-
-        current_log_prob = (
-                2. * (psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
-                                                     , *current_input)))
-        proposed_log_prob = (
-                2. * (psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
-                                                     , *proposal_input)))
+        current_log_prob = jnp.log(
+            jnp.square(psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
+                                                      , walker_state.positions)))
+        proposed_log_prob = jnp.log(
+            jnp.square(psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
+                                                      , proposed_positions)))
         log_ratio = proposed_log_prob - current_log_prob
 
         accept_probs = jnp.exp(log_ratio)
-
-        # mean_absolute_deviation = jnp.mean(jnp.abs(accept_probs - jnp.median(accept_probs)))
-        # n = 0.001
-        # accept_probs = jnp.clip(accept_probs,
-        #                        accept_probs - (n * mean_absolute_deviation),
-        #                        accept_probs + (n * mean_absolute_deviation))
-
-        # print(accept_probs.mean())
+        #print(accept_probs.mean())
 
         accept_probs = jnp.minimum(accept_probs, jnp.ones_like(accept_probs)).squeeze(-1)
 
         walker_state, decisions = self._mh_accept_step(walker_state, accept_probs, proposed_positions)
         return walker_state, decisions
-
-    def _mh_accept_step_psiformer(self, walker_state: WalkerState,
-                                  accept_probs: jnp.ndarray,
-                                  new_positions: jnp.ndarray) -> tuple[WalkerState, jnp.ndarray]:
-        accept_decisions = random.uniform(walker_state.key, shape=(walker_state.positions.shape[0],)
-                                          , dtype=self.computation_dtype) < accept_probs
-        updated_positions = jnp.where(accept_decisions[:, None, None], new_positions, walker_state.positions)
-        return walker_state.replace(positions=updated_positions), accept_decisions
-
-    @partial(jax.jit, static_argnums=0)
-    def convert_to_psiformer_input(self, coordinates: jnp.ndarray) \
-            -> (jnp.ndarray, jnp.ndarray):
-        """
-
-                :param coordinates: sampled cartesian coordinates, with shape (batch, N, 3)
-                :return:
-                """
-        if coordinates.ndim == 2:
-            coordinates = coordinates[None, ...]
-
-        assert coordinates.ndim == 3
-
-        batch = coordinates.shape[0]
-        electron_nuclear_features = jnp.zeros((batch, self.num_of_electrons,
-                                               len(self.nuc_positions), 4),
-                                              dtype=self.computation_dtype)
-
-        spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} e 1")
-        single_electron_features = coordinates
-        single_electron_features = jnp.concatenate([single_electron_features,
-                                                    spins_reshaped], axis=-1)
-
-        for i in range(self.num_of_electrons):
-            for j in range(len(self.nuc_positions)):
-                electron_nuclear_features = electron_nuclear_features.at[:, i, j, :3].set(
-                    coordinates[:, i, :] - self.nuc_positions[j, :]
-                )
-                electron_nuclear_features = electron_nuclear_features.at[:, i, j, -1].set(
-                    jnp.linalg.norm(coordinates[:, i, :] - self.nuc_positions[j, :], axis=-1)
-                )
-
-        spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} "
-                                            f"e {len(self.nuc_positions)} 1")
-
-        electron_nuclear_features = jnp.concatenate([electron_nuclear_features,
-                                                     spins_reshaped], axis=-1)
-
-        if self.scale_input:
-            electron_nuclear_features = electron_nuclear_features.at[:, :, :, :4].set(
-                electron_nuclear_features[:, :, :, :4] *
-                jnp.expand_dims((jnp.log(1. + electron_nuclear_features[..., 3])
-                                 / electron_nuclear_features[..., 3]), 3))
-
-        return electron_nuclear_features, single_electron_features
 
     def sample_psiformer(self, psiformer_train_state: TrainState, sample_step: int) -> jnp.ndarray:
         for _ in range(sample_step):

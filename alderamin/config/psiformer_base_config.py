@@ -6,17 +6,17 @@ from alderamin.data import GlobalSystem
 
 @dataclass
 class Hyperparams:
-    learning_rate: float | str = 0.05
+    learning_rate: float | str = 1e-3  # adam: 1e-6
     batch_size: int = 4096
-    step: int = 2000
+    step: int = 10000
     training_seed = 114514
-    gradient_clipping: float = 1e-3
+    gradient_clipping: float = 1e-1  # adam: 1e-5
     log_epsilon = 1E-12
 
-    burn_in_steps: int | None = 1000
+    burn_in_steps: int | None = 100
     sample_steps: int = 10
 
-    mad_clipping_factor: int = 3
+    mad_clipping_factor: int = 5
     scale_input: bool = False
 
     save_ckpt: bool = True
@@ -33,7 +33,7 @@ class SamplerSpec:
     system: GlobalSystem | None = None
     batch_size: int = Hyperparams.batch_size
     sampling_seed: int = 114514
-    target_acceptance: float = 0.9
+    target_acceptance: float = 0.5
     init_width: float = 1
     sample_width: float = 0.02
     sample_width_adapt_freq: int = 100
@@ -43,17 +43,17 @@ class SamplerSpec:
 @dataclass
 class PsiFormerSpec:
     num_of_determinants: int = 16
-    num_of_blocks: int = 4
+    num_of_blocks: int = 2
     num_heads: int = 4
     qkv_size: int = 64
-    use_memory_efficient_attention: bool = True
+    use_memory_efficient_attention: bool = False
     group: None | int = None
 
     computation_dtype: str = "float32"
     param_dtype: str = "float32"
 
-    num_of_electrons: int = 2
-    num_of_nucleus: int = 2
+    num_of_electrons: int = 0
+    num_of_nucleus: int = 0
 
     def initialize(self, sampler_spec: SamplerSpec):
         if sampler_spec.system is None:

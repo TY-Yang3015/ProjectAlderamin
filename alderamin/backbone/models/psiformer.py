@@ -1,6 +1,6 @@
 import flax.linen as nn
 import jax.numpy as jnp
-from einops import rearrange
+from einops import rearrange, repeat
 
 from alderamin.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop
 
@@ -29,6 +29,10 @@ class PsiFormer(nn.Module):
     num_of_electrons: int
     num_of_nucleus: int
 
+    spins: list
+    nuc_positions: list
+    scale_input: bool
+
     num_of_blocks: int
     num_heads: int
     qkv_size: int
@@ -38,29 +42,72 @@ class PsiFormer(nn.Module):
     computation_dtype: jnp.dtype | str = "float32"
     param_dtype: jnp.dtype | str = "float32"
 
+    def convert_to_input(self, coordinates: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        :param coordinates: the coordinates of the input coordinates, should have the shape
+                            ``(batch, num_of_electrons, 3)``
+        :return: electron-nuclear features ``(batch, num_of_electrons, num_of_nucleus, 5)``
+                            , single-electron features ``(batch, num_of_electrons, 4)``
+        """
+
+        if coordinates.ndim == 2:
+            coordinates = coordinates[None, ...]
+
+        assert coordinates.ndim == 3
+
+        batch = coordinates.shape[0]
+        electron_nuclear_features = jnp.ones((batch, self.num_of_electrons,
+                                               len(self.nuc_positions), 4),
+                                              dtype=self.computation_dtype)
+
+        spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} e 1")
+        single_electron_features = coordinates
+        single_electron_features = jnp.concatenate([single_electron_features,
+                                                    spins_reshaped], axis=-1)
+
+        for i in range(self.num_of_electrons):
+            for j in range(len(self.nuc_positions)):
+                electron_nuclear_features = electron_nuclear_features.at[:, i, j, :3].set(
+                    coordinates[:, i, :] - self.nuc_positions[j, :]
+                )
+                electron_nuclear_features = electron_nuclear_features.at[:, i, j, -1].set(
+                    jnp.linalg.norm(coordinates[:, i, :] - self.nuc_positions[j, :], axis=-1) + 1E-12
+                )
+
+        spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} "
+                                            f"e {len(self.nuc_positions)} 1")
+
+        electron_nuclear_features = jnp.concatenate([electron_nuclear_features,
+                                                     spins_reshaped], axis=-1)
+
+        if self.scale_input:
+            electron_nuclear_features = electron_nuclear_features.at[:, :, :, :4].set(
+                electron_nuclear_features[:, :, :, :4] *
+                jnp.expand_dims((jnp.log(1. + electron_nuclear_features[..., 3])
+                                 / electron_nuclear_features[..., 3]), 3))
+
+        return electron_nuclear_features, single_electron_features
+
     @nn.compact
     def __call__(
             self,
-            electron_nuclear_features: jnp.ndarray,
-            single_electron_features: jnp.ndarray,
+            coordinates: jnp.ndarray,
     ) -> jnp.ndarray:
         """
-        :param electron_nuclear_features: the electronic nuclear features tensor, should have the shape
-                                           (batch, num_of_electrons, num_of_nucleus, 5)
-        :param single_electron_features: the single electron features tensor, should have the shape
-                                           (batch, num_of_electrons, 4)
+        :param coordinates: the electronic nuclear features tensor, should have the shape
+                                           (batch, num_of_electrons, 3)
         :return: wavefunction values with shape (batch, 1)
         """
 
-        if electron_nuclear_features.ndim == 3:
-            electron_nuclear_features = jnp.expand_dims(electron_nuclear_features, 0)
+        electron_nuclear_features, single_electron_features = self.convert_to_input(coordinates)
 
-        x = rearrange(electron_nuclear_features, "b n c f -> b n (c f)")
+        x = repeat(electron_nuclear_features, "b n c f -> b n (c f)")
         x = nn.Dense(
             features=self.num_heads * self.qkv_size,
             use_bias=False,
             dtype=self.computation_dtype,
             param_dtype=self.param_dtype,
+            kernel_init=nn.initializers.normal(0.01)
         )(x)
 
         for _ in range(self.num_of_blocks):
@@ -70,16 +117,18 @@ class PsiFormer(nn.Module):
                 group=self.group,
                 param_dtype=self.param_dtype,
                 computation_dtype=self.computation_dtype,
+                kernel_init=nn.initializers.normal(0.01)
             )(x)
 
         psiformer_pre_det = nn.Dense(
             features=self.num_of_electrons * self.num_of_determinants,
+            kernel_init=nn.initializers.normal(0.01),
             use_bias=False,
             dtype=self.computation_dtype,
             param_dtype=self.param_dtype,
         )(x)
 
-        log_abs_wavefunction = Envelop(
+        wavefunction = Envelop(
             num_of_determinants=self.num_of_determinants,
             num_of_electrons=self.num_of_electrons,
             num_of_nucleus=self.num_of_nucleus,
@@ -89,15 +138,22 @@ class PsiFormer(nn.Module):
 
         jastrow_factor = SimpleJastrow()(single_electron_features)
 
-        # return jnp.log(jnp.abs(jnp.exp(log_abs_wavefunction) * jnp.exp(jastrow_factor)) + 1e-12)
-        return jastrow_factor + log_abs_wavefunction
+        wavefunction *= jnp.exp(jastrow_factor)
 
-# import jax
+        return wavefunction
 
-# print(PsiFormer(num_of_determinants=6,
-#                num_of_electrons=2,
-#                num_of_nucleus=2,
-#                num_of_blocks=5,
-#                num_heads=8).tabulate(jax.random.PRNGKey(0),
-#                                       jnp.ones((512, 2, 2, 5)), jnp.ones((512, 2, 4)),
-#                                       depth=1, console_kwargs={'width': 150}))
+"""
+import jax
+
+print(PsiFormer(num_of_determinants=6,
+                num_of_electrons=2,
+                num_of_nucleus=2,
+                num_of_blocks=5,
+                num_heads=8,
+                qkv_size=64,
+                scale_input=True,
+                spins=jnp.array([-1, 1]),
+                nuc_positions=jnp.array([[1, 0, 0], [0, 0, 0]])).tabulate(jax.random.PRNGKey(0),
+                                       jnp.ones((512, 6)),
+                                       depth=1, console_kwargs={'width': 150}))
+#"""

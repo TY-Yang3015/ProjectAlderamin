@@ -22,6 +22,7 @@ class PsiFormerBlock(nn.Module):
 
     num_heads: int
     use_memory_efficient_attention: bool
+    kernel_init: nn.initializers.Initializer
     group: None | int = None
 
     param_dtype: jnp.dtype = jnp.float32
@@ -37,21 +38,17 @@ class PsiFormerBlock(nn.Module):
             use_qkv_bias=False,
             use_dropout=False,
             computation_dtype=self.computation_dtype,
+            kernel_init=self.kernel_init,
             param_dtype=self.param_dtype,
         )(x, False, None)
-        h = nn.Dense(
-            features=x.shape[-1],
-            use_bias=False,
-            dtype=self.computation_dtype,
-            param_dtype=self.param_dtype,
-        )(h)
 
         h += x
         h += nn.tanh(
             nn.Dense(
                 features=x.shape[-1],
                 use_bias=True,
-                bias_init=nn.initializers.normal(stddev=0.1),
+                kernel_init=self.kernel_init,
+                bias_init=nn.initializers.normal(0.01),
                 dtype=self.computation_dtype,
                 param_dtype=self.param_dtype,
             )(h)

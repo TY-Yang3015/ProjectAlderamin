@@ -35,25 +35,26 @@ class MultiHeadCrossAttention(nn.Module):
     use_qkv_bias: bool = False
     use_dropout: bool = False
     dropout_rate: float = 0.1
+    kernel_init: nn.initializers.Initializer = jax.nn.initializers.normal(stddev=0.01)
 
     param_dtype: jnp.dtype = jnp.float32
     computation_dtype: jnp.dtype = jnp.float32
 
     @nn.compact
     def __call__(
-        self, x: jnp.ndarray, train: bool, context: jnp.ndarray | None = None
+            self, x: jnp.ndarray, train: bool, context: jnp.ndarray | None = None
     ) -> jnp.ndarray:
 
-        if self.group is not None:
-            x = nn.GroupNorm(
-                num_groups=self.group if x.shape[-1] % self.group == 0 else x.shape[-1],
-                group_size=None,
-                param_dtype=self.param_dtype,
-            )(x)
-        else:
-            x = nn.LayerNorm(
-                dtype=self.computation_dtype, param_dtype=self.param_dtype
-            )(x)
+        #if self.group is not None:
+        #    x = nn.GroupNorm(
+        #        num_groups=self.group if x.shape[-1] % self.group == 0 else x.shape[-1],
+        #        group_size=None,
+        #        param_dtype=self.param_dtype,
+        #    )(x)
+        #else:
+        #    x = nn.LayerNorm(
+        #        dtype=self.computation_dtype, param_dtype=self.param_dtype
+        #    )(x)
         shape = x.shape
 
         if self.use_memory_efficient_attention:
@@ -67,9 +68,8 @@ class MultiHeadCrossAttention(nn.Module):
         else:
             x = nn.MultiHeadDotProductAttention(
                 num_heads=self.num_heads,
-                qkv_features=shape[-1],
-                out_features=self.output_channels,
                 dropout_rate=0 if self.use_dropout is False else self.dropout_rate,
+                kernel_init=self.kernel_init,
                 deterministic=not train,
                 use_bias=self.use_qkv_bias,
                 dtype=self.computation_dtype,
@@ -81,13 +81,10 @@ class MultiHeadCrossAttention(nn.Module):
 
         return x
 
-
-#print(
-#    MultiHeadCrossAttention(512, 8).tabulate(
+# print(MultiHeadCrossAttention(512, 8).tabulate(
 #        jax.random.PRNGKey(0),
-#        jnp.ones((5, 2, 512), dtype=jnp.float16),
+#        jnp.ones((512, 2, 128), dtype=jnp.float16),
 #        False,
-#        depth=1,
+#        depth=3,
 #        console_kwargs={"width": 150},
-#    )
-#)
+# ))
