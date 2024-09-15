@@ -45,16 +45,17 @@ class MultiHeadCrossAttention(nn.Module):
         self, x: jnp.ndarray, train: bool, context: jnp.ndarray | None = None
     ) -> jnp.ndarray:
 
-        # if self.group is not None:
-        #    x = nn.GroupNorm(
-        #        num_groups=self.group if x.shape[-1] % self.group == 0 else x.shape[-1],
-        #        group_size=None,
-        #        param_dtype=self.param_dtype,
-        #    )(x)
-        # else:
-        #    x = nn.LayerNorm(
-        #        dtype=self.computation_dtype, param_dtype=self.param_dtype
-        #    )(x)
+        if self.group is not None:
+            x = nn.GroupNorm(
+                num_groups=self.group if x.shape[-1] % self.group == 0 else x.shape[-1],
+                group_size=None,
+                param_dtype=self.param_dtype,
+            )(x)
+        else:
+            x = nn.LayerNorm(
+                dtype=self.computation_dtype, param_dtype=self.param_dtype,
+                use_scale=False, use_bias=False, epsilon=1e-24
+            )(x)
         shape = x.shape
 
         if self.use_memory_efficient_attention:

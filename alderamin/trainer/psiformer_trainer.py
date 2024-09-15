@@ -1,21 +1,23 @@
-import flax.linen as nn
 from flax.training.train_state import TrainState
 import jax.numpy as jnp
+from clu import metric_writers
 from jax import random
 from jax.lib import xla_bridge
 from functools import partial
-from einops import repeat, rearrange
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 import jax
 import logging
-import folx
 import optax
-from optax_shampoo import shampoo
 
+import alderamin.folx as folx
+from alderamin.shampoo.distributed_shampoo import distributed_shampoo as shampoo
 from alderamin.backbone.models import PsiFormer
 from alderamin.data import GlobalSystem
 from alderamin.sampler import MetropolisHastingSampler
 
+
+writer = metric_writers.create_default_writer()
+writer.write_histograms()
 
 class PsiFormerTrainer:
     def __init__(self, config: DictConfig, system: GlobalSystem):
@@ -83,8 +85,11 @@ class PsiFormerTrainer:
             decay_rate=0.95,
             end_value=self.config.hyperparam.learning_rate / 2.0,
         )
-        self.optimiser = optax.adam(lr)
-        # self.optimiser = shampoo(self.config.hyperparams.learning_rate, block_size=128)
+        #self.optimiser = optax.adam(lr)
+        self.optimiser = shampoo(self.config.hyperparam.learning_rate,
+                                 block_size=128,
+                                 diagonal_epsilon=1e-12,
+                                 matrix_epsilon=1e-12)
         self.optimiser = optax.chain(
             optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
             self.optimiser,

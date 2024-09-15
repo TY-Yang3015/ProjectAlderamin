@@ -1,9 +1,9 @@
 hyperparam:
-  learning_rate: 1e-5  # adam: 1e-6
+  learning_rate: 5e-3  # adam: 1e-5
   batch_size: 4096
   step: 10000
   training_seed: 114514
-  gradient_clipping: 1e-3  # adam: 1e-5
+  gradient_clipping: 5e-2  # adam: 1e-3
   log_epsilon: 1e-12
 
   mad_clipping_factor: 5
