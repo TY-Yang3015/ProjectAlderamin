@@ -11,7 +11,7 @@ class Hyperparams:
     step: int = 10000
     training_seed = 114514
     gradient_clipping: float = 1e-1  # adam: 1e-5
-    log_epsilon = 1E-12
+    log_epsilon = 1e-12
 
     burn_in_steps: int | None = 100
     sample_steps: int = 10
@@ -57,7 +57,9 @@ class PsiFormerSpec:
 
     def initialize(self, sampler_spec: SamplerSpec):
         if sampler_spec.system is None:
-            raise ValueError("System in SamplerSpec must be initialized before PsiFormerSpec.")
+            raise ValueError(
+                "System in SamplerSpec must be initialized before PsiFormerSpec."
+            )
         self.num_of_electrons = sampler_spec.system.total_electrons
         self.num_of_nucleus = sampler_spec.system.total_nucleus
 

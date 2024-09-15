@@ -42,16 +42,16 @@ class MultiHeadCrossAttention(nn.Module):
 
     @nn.compact
     def __call__(
-            self, x: jnp.ndarray, train: bool, context: jnp.ndarray | None = None
+        self, x: jnp.ndarray, train: bool, context: jnp.ndarray | None = None
     ) -> jnp.ndarray:
 
-        #if self.group is not None:
+        # if self.group is not None:
         #    x = nn.GroupNorm(
         #        num_groups=self.group if x.shape[-1] % self.group == 0 else x.shape[-1],
         #        group_size=None,
         #        param_dtype=self.param_dtype,
         #    )(x)
-        #else:
+        # else:
         #    x = nn.LayerNorm(
         #        dtype=self.computation_dtype, param_dtype=self.param_dtype
         #    )(x)
@@ -80,6 +80,7 @@ class MultiHeadCrossAttention(nn.Module):
         x = nn.softmax(x, axis=-1)
 
         return x
+
 
 # print(MultiHeadCrossAttention(512, 8).tabulate(
 #        jax.random.PRNGKey(0),

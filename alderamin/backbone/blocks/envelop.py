@@ -7,7 +7,8 @@ import jax
 
 
 def custom_initializer(key, shape, dtype=jnp.float32):
-    return jax.random.normal(key, shape, dtype) * 0.05 + 1.
+    return jax.random.normal(key, shape, dtype) * 0.05 + 1.0
+
 
 class Envelop(nn.Module):
     """
@@ -55,15 +56,19 @@ class Envelop(nn.Module):
 
         assert psiformer_pre_det.ndim == 3, "psiformer_pre_det must be 3d tensor."
 
-        psiformer_pre_det = psiformer_pre_det.reshape(psiformer_pre_det.shape[0],
-                                                      self.num_of_electrons, self.num_of_electrons,
-                                                      self.num_of_determinants)
+        psiformer_pre_det = psiformer_pre_det.reshape(
+            psiformer_pre_det.shape[0],
+            self.num_of_electrons,
+            self.num_of_electrons,
+            self.num_of_determinants,
+        )
         psiformer_pre_det = rearrange(psiformer_pre_det, "b i j k -> b k i j")
 
         elec_nuc_features = rearrange(elec_nuc_features, f"b j I 1 -> b 1 j I ")
-        elec_nuc_features = repeat(elec_nuc_features
-                                   , f"b 1 j I -> b {self.num_of_determinants} 1 j I")  # b k 1 j I
-        exponent = (self.sigma_kiI * elec_nuc_features)  # k i 1 I, b k 1 j I -> b k i j I
+        elec_nuc_features = repeat(
+            elec_nuc_features, f"b 1 j I -> b {self.num_of_determinants} 1 j I"
+        )  # b k 1 j I
+        exponent = self.sigma_kiI * elec_nuc_features  # k i 1 I, b k 1 j I -> b k i j I
 
         # k i 1 I, b k i j I -> b k i j
         matrix_element_omega = (self.pi_kiI * jnp.exp(-exponent)).sum(axis=-1)

@@ -12,6 +12,7 @@ from alderamin.data import GlobalSystem
 
 # TODO: numerical precision control
 
+
 @struct.dataclass
 class WalkerState:
     positions: jnp.ndarray
@@ -20,30 +21,39 @@ class WalkerState:
 
     def propose(self):
         new_key, subkey = random.split(self.key)
-        move = random.normal(subkey, self.positions.shape,
-                             ) * self.step_size
+        move = (
+            random.normal(
+                subkey,
+                self.positions.shape,
+            )
+            * self.step_size
+        )
         proposed_positions = self.positions + move
         return self.replace(key=new_key), proposed_positions
 
 
 class MetropolisHastingSampler:
-    def __init__(self,
-                 system: GlobalSystem,
-                 batch_size: int,
-                 sampling_seed: int,
-                 target_acceptance: float,
-                 init_width: float,
-                 sample_width: float,
-                 sample_width_adapt_freq: int,
-                 log_epsilon: float = 1e-12,
-                 scale_input: bool = True,
-                 computation_dtype: jnp.dtype | str = "float32",
-                 ):
+    def __init__(
+        self,
+        system: GlobalSystem,
+        batch_size: int,
+        sampling_seed: int,
+        target_acceptance: float,
+        init_width: float,
+        sample_width: float,
+        sample_width_adapt_freq: int,
+        log_epsilon: float = 1e-12,
+        scale_input: bool = True,
+        computation_dtype: jnp.dtype | str = "float32",
+    ):
         self.num_of_electrons: int = system.total_electrons
-        self.nuc_positions: jnp.ndarray = jnp.array([member.position for member in system.nucleus_list],
-                                                    dtype=computation_dtype)
-        self.spins: jnp.ndarray = jnp.array([electron.spin for electron in system.electrons_list],
-                                            dtype=computation_dtype)
+        self.nuc_positions: jnp.ndarray = jnp.array(
+            [member.position for member in system.nucleus_list], dtype=computation_dtype
+        )
+        self.spins: jnp.ndarray = jnp.array(
+            [electron.spin for electron in system.electrons_list],
+            dtype=computation_dtype,
+        )
 
         self.batch_size: int = batch_size
         self.num_of_walkers: int = self.batch_size
@@ -57,8 +67,9 @@ class MetropolisHastingSampler:
         self.log_epsilon: float = log_epsilon
         self.scale_input: bool = scale_input
 
-        self.electron_nuc_pair: jnp.ndarray = jnp.array(system.electron_to_nucleus,
-                                                        dtype=jnp.int32)
+        self.electron_nuc_pair: jnp.ndarray = jnp.array(
+            system.electron_to_nucleus, dtype=jnp.int32
+        )
 
         self.critical_key: random.PRNGKey = random.PRNGKey(sampling_seed * 42)
 
@@ -67,9 +78,14 @@ class MetropolisHastingSampler:
         self.global_memory: jnp.array = jnp.array([])
 
     def initialise_walkers(self) -> WalkerState:
-        init_positions: jnp.ndarray = random.normal(self.sampling_key,
-                                                    shape=(self.num_of_walkers, self.num_of_electrons, 3)
-                                                    , dtype=self.computation_dtype) * self.init_width
+        init_positions: jnp.ndarray = (
+            random.normal(
+                self.sampling_key,
+                shape=(self.num_of_walkers, self.num_of_electrons, 3),
+                dtype=self.computation_dtype,
+            )
+            * self.init_width
+        )
 
         nuc_pos_array: jnp.ndarray = self.nuc_positions[self.electron_nuc_pair]
         nuc_pos_array = jnp.tile(nuc_pos_array, (self.num_of_walkers, 1, 1))
@@ -78,14 +94,17 @@ class MetropolisHastingSampler:
         self.sampling_key, _ = random.split(self.sampling_key)
         return WalkerState(
             positions=init_positions,
-            step_size=jnp.ones((self.num_of_walkers, 1, 1),
-                               dtype=self.computation_dtype) * self.sample_width,
+            step_size=jnp.ones(
+                (self.num_of_walkers, 1, 1), dtype=self.computation_dtype
+            )
+            * self.sample_width,
             key=random.PRNGKey(*random.randint(self.sampling_key, (1,), -1e5, 1e5)),
         )
 
     @partial(jax.jit, static_argnums=0)
-    def log_multivariate_gaussian(self, x: jnp.ndarray, mu: jnp.ndarray,
-                                  sigma: jnp.ndarray) -> jnp.ndarray:
+    def log_multivariate_gaussian(
+        self, x: jnp.ndarray, mu: jnp.ndarray, sigma: jnp.ndarray
+    ) -> jnp.ndarray:
         """
         Compute the log probability of x under a multivariate Gaussian distribution.
 
@@ -107,47 +126,69 @@ class MetropolisHastingSampler:
         # solve for the Mahalanobis distance
         # TODO: remove inverse for stability
         sigma_inv = jnp.linalg.inv(sigma)
-        mahalanobis_term = jnp.einsum('ijk,kl,ijl->ij', diff, sigma_inv, diff)  # (batch, electrons)
+        mahalanobis_term = jnp.einsum(
+            "ijk,kl,ijl->ij", diff, sigma_inv, diff
+        )  # (batch, electrons)
 
         # compute the log probability
-        log_probs = -0.5 * (3 * jnp.log(2 * jnp.pi) + logdet + mahalanobis_term)  # (batch, electrons)
+        log_probs = -0.5 * (
+            3 * jnp.log(2 * jnp.pi) + logdet + mahalanobis_term
+        )  # (batch, electrons)
 
         return log_probs
 
     def _burn_in_distribution(self, x: jnp.ndarray) -> jnp.ndarray:
         log_probs = jnp.zeros(shape=self.batch_size, dtype=self.computation_dtype)
         for nuc_pos in self.nuc_positions:
-            log_probs += self.log_multivariate_gaussian(x, nuc_pos,
-                                                        jnp.eye(3) * self.init_width).prod(axis=-1)
+            log_probs += self.log_multivariate_gaussian(
+                x, nuc_pos, jnp.eye(3) * self.init_width
+            ).prod(axis=-1)
         return log_probs
 
     @partial(jax.jit, static_argnums=0)
-    def _burn_in_step(self, walker_state: WalkerState) -> tuple[WalkerState, jnp.ndarray]:
+    def _burn_in_step(
+        self, walker_state: WalkerState
+    ) -> tuple[WalkerState, jnp.ndarray]:
         walker_state, proposed_positions = walker_state.propose()
 
-        current_log_prob = 2. * self._burn_in_distribution(walker_state.positions)
-        proposed_log_prob = 2. * self._burn_in_distribution(proposed_positions)
+        current_log_prob = 2.0 * self._burn_in_distribution(walker_state.positions)
+        proposed_log_prob = 2.0 * self._burn_in_distribution(proposed_positions)
 
         accept_probs = jnp.exp(proposed_log_prob - current_log_prob)
         accept_probs = jnp.minimum(accept_probs, 1.0)
 
-        walker_state, decisions = self._mh_accept_step(walker_state, accept_probs, proposed_positions)
+        walker_state, decisions = self._mh_accept_step(
+            walker_state, accept_probs, proposed_positions
+        )
         return walker_state, jnp.array(decisions, dtype=jnp.int32)
 
-    def _mh_accept_step(self, walker_state: WalkerState,
-                        accept_probs: jnp.ndarray,
-                        new_positions: jnp.ndarray) -> tuple[WalkerState, jnp.ndarray]:
-        accept_decisions = random.uniform(walker_state.key, shape=(walker_state.positions.shape[0],)
-                                          , dtype=self.computation_dtype) < accept_probs
-        updated_positions = jnp.where(accept_decisions[:, None, None], new_positions, walker_state.positions)
+    def _mh_accept_step(
+        self,
+        walker_state: WalkerState,
+        accept_probs: jnp.ndarray,
+        new_positions: jnp.ndarray,
+    ) -> tuple[WalkerState, jnp.ndarray]:
+        accept_decisions = (
+            random.uniform(
+                walker_state.key,
+                shape=(walker_state.positions.shape[0],),
+                dtype=self.computation_dtype,
+            )
+            < accept_probs
+        )
+        updated_positions = jnp.where(
+            accept_decisions[:, None, None], new_positions, walker_state.positions
+        )
         return walker_state.replace(positions=updated_positions), accept_decisions
 
     @partial(jax.jit, static_argnums=0)
-    def _adapt_step_size(self, memory: jnp.ndarray,
-                         walker_state: WalkerState) -> tuple[jnp.ndarray, WalkerState]:
+    def _adapt_step_size(
+        self, memory: jnp.ndarray, walker_state: WalkerState
+    ) -> tuple[jnp.ndarray, WalkerState]:
         accept_rate = jnp.sum(memory) / len(memory)
-        new_size = walker_state.step_size * jnp.exp((accept_rate - self.target_acceptance)
-                                                    / jnp.sqrt(len(memory)))
+        new_size = walker_state.step_size * jnp.exp(
+            (accept_rate - self.target_acceptance) / jnp.sqrt(len(memory))
+        )
         walker_state = walker_state.replace(step_size=new_size)
         memory = jnp.array([])
         return memory, walker_state
@@ -158,36 +199,57 @@ class MetropolisHastingSampler:
             self.walker_state, decisions = self._burn_in_step(self.walker_state)
             memory = jnp.append(memory, decisions)
             if step % self.sample_width_adapt_freq == 0:
-                memory, self.walker_state = self._adapt_step_size(memory, self.walker_state)
+                memory, self.walker_state = self._adapt_step_size(
+                    memory, self.walker_state
+                )
         return self.walker_state.positions
 
     @partial(jax.jit, static_argnums=0)
-    def _psiformer_sample_step(self, walker_state: WalkerState,
-                               psiformer_train_state: TrainState) -> tuple[WalkerState, jnp.ndarray]:
+    def _psiformer_sample_step(
+        self, walker_state: WalkerState, psiformer_train_state: TrainState
+    ) -> tuple[WalkerState, jnp.ndarray]:
         walker_state, proposed_positions = walker_state.propose()
 
         current_log_prob = jnp.log(
-            jnp.square(psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
-                                                      , walker_state.positions)))
+            jnp.square(
+                psiformer_train_state.apply_fn(
+                    {"params": psiformer_train_state.params}, walker_state.positions
+                )
+            )
+        )
         proposed_log_prob = jnp.log(
-            jnp.square(psiformer_train_state.apply_fn({"params": psiformer_train_state.params}
-                                                      , proposed_positions)))
+            jnp.square(
+                psiformer_train_state.apply_fn(
+                    {"params": psiformer_train_state.params}, proposed_positions
+                )
+            )
+        )
         log_ratio = proposed_log_prob - current_log_prob
 
         accept_probs = jnp.exp(log_ratio)
-        #print(accept_probs.mean())
+        # print(accept_probs.mean())
 
-        accept_probs = jnp.minimum(accept_probs, jnp.ones_like(accept_probs)).squeeze(-1)
+        accept_probs = jnp.minimum(accept_probs, jnp.ones_like(accept_probs)).squeeze(
+            -1
+        )
 
-        walker_state, decisions = self._mh_accept_step(walker_state, accept_probs, proposed_positions)
+        walker_state, decisions = self._mh_accept_step(
+            walker_state, accept_probs, proposed_positions
+        )
         return walker_state, decisions
 
-    def sample_psiformer(self, psiformer_train_state: TrainState, sample_step: int) -> jnp.ndarray:
+    def sample_psiformer(
+        self, psiformer_train_state: TrainState, sample_step: int
+    ) -> jnp.ndarray:
         for _ in range(sample_step):
-            self.walker_state, decisions = self._psiformer_sample_step(self.walker_state, psiformer_train_state)
+            self.walker_state, decisions = self._psiformer_sample_step(
+                self.walker_state, psiformer_train_state
+            )
             self.global_memory = jnp.append(self.global_memory, decisions)
             if len(self.global_memory) % self.sample_width_adapt_freq == 0:
-                self.global_memory, self.walker_state = self._adapt_step_size(self.global_memory, self.walker_state)
+                self.global_memory, self.walker_state = self._adapt_step_size(
+                    self.global_memory, self.walker_state
+                )
         return self.walker_state.positions
 
 

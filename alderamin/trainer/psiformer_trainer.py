@@ -49,8 +49,13 @@ class PsiFormerTrainer:
         self.num_of_electrons = self.system.total_electrons
         self.num_of_nucleus = self.system.total_nucleus
         self.nuc_charges = jnp.array([nuc.charge for nuc in self.system.nucleus_list])
-        self.nuc_positions = jnp.array([member.position for member in self.system.nucleus_list])
-        self.spins = jnp.array([electron.spin for electron in self.system.electrons_list], dtype=jnp.float32)
+        self.nuc_positions = jnp.array(
+            [member.position for member in self.system.nucleus_list]
+        )
+        self.spins = jnp.array(
+            [electron.spin for electron in self.system.electrons_list],
+            dtype=jnp.float32,
+        )
 
         # build neural network model
         self.psiformer = PsiFormer(
@@ -70,18 +75,17 @@ class PsiFormerTrainer:
         )
 
         # initialise optimiser
-        #self.optimiser = optax.adam(self.config.hyperparams.learning_rate)
+        # self.optimiser = optax.adam(self.config.hyperparams.learning_rate)
         self.optimiser = shampoo(self.config.hyperparams.learning_rate, block_size=128)
         self.optimiser = optax.chain(
             optax.clip_by_global_norm(self.config.hyperparams.gradient_clipping),
             self.optimiser,
-            #optax.add_decayed_weights(weight_decay=1e-4),
-            optax.ema(0.99)
+            # optax.add_decayed_weights(weight_decay=1e-4),
+            optax.ema(0.99),
         )
 
     @partial(jax.jit, static_argnums=0)
     def _train_step(self, batch, state):
-
         def get_electric_hamiltonian(coordinates: jnp.ndarray) -> jnp.ndarray:
             elec_elec_term = jnp.zeros((self.config.hyperparams.batch_size, 1))
             elec_nuc_term = jnp.zeros((self.config.hyperparams.batch_size, 1))
@@ -89,25 +93,36 @@ class PsiFormerTrainer:
 
             for i in range(self.num_of_electrons):
                 for j in range(i):
-                    elec_elec_term = elec_elec_term.at[:, 0].add(1. / (jnp.linalg.norm(coordinates[:, i, :]
-                                                                                       - coordinates[:, j, :],
-                                                                                       axis=-1)))
+                    elec_elec_term = elec_elec_term.at[:, 0].add(
+                        1.0
+                        / (
+                            jnp.linalg.norm(
+                                coordinates[:, i, :] - coordinates[:, j, :], axis=-1
+                            )
+                        )
+                    )
 
             for I in range(self.num_of_nucleus):
                 for i in range(self.num_of_electrons):
                     elec_nuc_term = elec_nuc_term.at[:, 0].add(
-                        (self.nuc_charges[I] / (jnp.linalg.norm(coordinates[:, i, :]
-                                                                - self.nuc_positions[
-                                                                  I, :],
-                                                                axis=-1))
-                         ))
+                        (
+                            self.nuc_charges[I]
+                            / (
+                                jnp.linalg.norm(
+                                    coordinates[:, i, :] - self.nuc_positions[I, :],
+                                    axis=-1,
+                                )
+                            )
+                        )
+                    )
 
             for I in range(self.num_of_nucleus):
                 for J in range(I):
                     nuc_nuc_term = nuc_nuc_term.at[:, 0].add(
-                        (self.nuc_charges[I] * self.nuc_charges[J]) /
-                        jnp.linalg.norm(self.nuc_positions[I, :] - self.nuc_positions[J, :],
-                                        axis=-1)
+                        (self.nuc_charges[I] * self.nuc_charges[J])
+                        / jnp.linalg.norm(
+                            self.nuc_positions[I, :] - self.nuc_positions[J, :], axis=-1
+                        )
                     )
 
             return elec_elec_term - elec_nuc_term + nuc_nuc_term
@@ -126,31 +141,35 @@ class PsiFormerTrainer:
 
             electric_term = get_electric_hamiltonian(batch)
 
-            #jacobian_op = jax.grad(get_wavefunction)
-            #jacobian = jax.vmap(jacobian_op)(batch)
+            # jacobian_op = jax.grad(get_wavefunction)
+            # jacobian = jax.vmap(jacobian_op)(batch)
 
-            #laplacian_op = jax.grad(lambda x: jnp.sum(jacobian_op(x)))
-            #laplacian = jax.vmap(laplacian_op)(batch)
+            # laplacian_op = jax.grad(lambda x: jnp.sum(jacobian_op(x)))
+            # laplacian = jax.vmap(laplacian_op)(batch)
 
             laplacian_op = folx.forward_laplacian(get_wavefunction)
             result = jax.vmap(laplacian_op)(batch)
             laplacian, jacobian = result.laplacian, result.jacobian.dense_array
 
-            #print(jacobian.shape)
-            #print(laplacian.shape)
-            
+            # print(jacobian.shape)
+            # print(laplacian.shape)
+
             kinetic_term = -laplacian * 0.5
 
-            kinetic_term = kinetic_term.reshape(-1, 1)/get_wavefunction(batch)
+            kinetic_term = kinetic_term.reshape(-1, 1) / get_wavefunction(batch)
 
             energy_batch = electric_term + kinetic_term
-            energy_batch = jnp.clip(energy_batch, None, 1.)
+            energy_batch = jnp.clip(energy_batch, None, 1.0)
 
-            mean_absolute_deviation = jnp.mean(jnp.abs(energy_batch - jnp.median(energy_batch)))
+            mean_absolute_deviation = jnp.mean(
+                jnp.abs(energy_batch - jnp.median(energy_batch))
+            )
             n = self.config.hyperparams.mad_clipping_factor
-            energy_batch = jnp.clip(energy_batch,
-                                    jnp.median(energy_batch) - (n * mean_absolute_deviation),
-                                    jnp.median(energy_batch) + (n * mean_absolute_deviation))
+            energy_batch = jnp.clip(
+                energy_batch,
+                jnp.median(energy_batch) - (n * mean_absolute_deviation),
+                jnp.median(energy_batch) + (n * mean_absolute_deviation),
+            )
 
             return energy_batch.mean()
 
@@ -166,7 +185,7 @@ class PsiFormerTrainer:
             (
                 self.config.hyperparams.batch_size,
                 self.config.nn_spec.num_of_electrons,
-                3
+                3,
             ),
             jnp.float32,
         )
@@ -181,13 +200,12 @@ class PsiFormerTrainer:
         )
 
         for step in range(self.config.hyperparams.step):
-            batch = self.sampler.sample_psiformer(state,
-                                                  self.config.hyperparams.sample_steps)
-            #batch = self.sampler.walker_state.positions
+            batch = self.sampler.sample_psiformer(
+                state, self.config.hyperparams.sample_steps
+            )
+            # batch = self.sampler.walker_state.positions
             state, energy = self._train_step(batch, state)
-            #print(batch[0, 0, :])
-            logging.info(f"step: {step} "
-                         f"energy: {energy}"
-                         f"")
+            # print(batch[0, 0, :])
+            logging.info(f"step: {step} " f"energy: {energy}" f"")
 
         return state

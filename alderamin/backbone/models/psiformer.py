@@ -42,7 +42,9 @@ class PsiFormer(nn.Module):
     computation_dtype: jnp.dtype | str = "float32"
     param_dtype: jnp.dtype | str = "float32"
 
-    def convert_to_input(self, coordinates: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def convert_to_input(
+        self, coordinates: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
         """
         :param coordinates: the coordinates of the input coordinates, should have the shape
                             ``(batch, num_of_electrons, 3)``
@@ -56,42 +58,57 @@ class PsiFormer(nn.Module):
         assert coordinates.ndim == 3
 
         batch = coordinates.shape[0]
-        electron_nuclear_features = jnp.ones((batch, self.num_of_electrons,
-                                               len(self.nuc_positions), 4),
-                                              dtype=self.computation_dtype)
+        electron_nuclear_features = jnp.ones(
+            (batch, self.num_of_electrons, len(self.nuc_positions), 4),
+            dtype=self.computation_dtype,
+        )
 
         spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} e 1")
         single_electron_features = coordinates
-        single_electron_features = jnp.concatenate([single_electron_features,
-                                                    spins_reshaped], axis=-1)
+        single_electron_features = jnp.concatenate(
+            [single_electron_features, spins_reshaped], axis=-1
+        )
 
         for i in range(self.num_of_electrons):
             for j in range(len(self.nuc_positions)):
-                electron_nuclear_features = electron_nuclear_features.at[:, i, j, :3].set(
-                    coordinates[:, i, :] - self.nuc_positions[j, :]
-                )
-                electron_nuclear_features = electron_nuclear_features.at[:, i, j, -1].set(
-                    jnp.linalg.norm(coordinates[:, i, :] - self.nuc_positions[j, :], axis=-1) + 1E-12
+                electron_nuclear_features = electron_nuclear_features.at[
+                    :, i, j, :3
+                ].set(coordinates[:, i, :] - self.nuc_positions[j, :])
+                electron_nuclear_features = electron_nuclear_features.at[
+                    :, i, j, -1
+                ].set(
+                    jnp.linalg.norm(
+                        coordinates[:, i, :] - self.nuc_positions[j, :], axis=-1
+                    )
+                    + 1e-12
                 )
 
-        spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} "
-                                            f"e {len(self.nuc_positions)} 1")
+        spins_reshaped = repeat(
+            self.spins, f"e -> {coordinates.shape[0]} " f"e {len(self.nuc_positions)} 1"
+        )
 
-        electron_nuclear_features = jnp.concatenate([electron_nuclear_features,
-                                                     spins_reshaped], axis=-1)
+        electron_nuclear_features = jnp.concatenate(
+            [electron_nuclear_features, spins_reshaped], axis=-1
+        )
 
         if self.scale_input:
             electron_nuclear_features = electron_nuclear_features.at[:, :, :, :4].set(
-                electron_nuclear_features[:, :, :, :4] *
-                jnp.expand_dims((jnp.log(1. + electron_nuclear_features[..., 3])
-                                 / electron_nuclear_features[..., 3]), 3))
+                electron_nuclear_features[:, :, :, :4]
+                * jnp.expand_dims(
+                    (
+                        jnp.log(1.0 + electron_nuclear_features[..., 3])
+                        / electron_nuclear_features[..., 3]
+                    ),
+                    3,
+                )
+            )
 
         return electron_nuclear_features, single_electron_features
 
     @nn.compact
     def __call__(
-            self,
-            coordinates: jnp.ndarray,
+        self,
+        coordinates: jnp.ndarray,
     ) -> jnp.ndarray:
         """
         :param coordinates: the electronic nuclear features tensor, should have the shape
@@ -99,7 +116,9 @@ class PsiFormer(nn.Module):
         :return: wavefunction values with shape (batch, 1)
         """
 
-        electron_nuclear_features, single_electron_features = self.convert_to_input(coordinates)
+        electron_nuclear_features, single_electron_features = self.convert_to_input(
+            coordinates
+        )
 
         x = repeat(electron_nuclear_features, "b n c f -> b n (c f)")
         x = nn.Dense(
@@ -107,7 +126,7 @@ class PsiFormer(nn.Module):
             use_bias=False,
             dtype=self.computation_dtype,
             param_dtype=self.param_dtype,
-            kernel_init=nn.initializers.normal(0.01)
+            kernel_init=nn.initializers.normal(0.01),
         )(x)
 
         for _ in range(self.num_of_blocks):
@@ -117,7 +136,7 @@ class PsiFormer(nn.Module):
                 group=self.group,
                 param_dtype=self.param_dtype,
                 computation_dtype=self.computation_dtype,
-                kernel_init=nn.initializers.normal(0.01)
+                kernel_init=nn.initializers.normal(0.01),
             )(x)
 
         psiformer_pre_det = nn.Dense(
@@ -141,6 +160,7 @@ class PsiFormer(nn.Module):
         wavefunction *= jnp.exp(jastrow_factor)
 
         return wavefunction
+
 
 """
 import jax
