@@ -6,11 +6,11 @@ from alderamin.data import GlobalSystem
 
 @dataclass
 class Hyperparams:
-    learning_rate: float | str = 1e-3  # adam: 1e-6
+    learning_rate: float | str = 1e-5  # adam: 1e-6
     batch_size: int = 4096
     step: int = 10000
     training_seed = 114514
-    gradient_clipping: float = 1e-1  # adam: 1e-5
+    gradient_clipping: float = 1e-3  # adam: 1e-5
     log_epsilon = 1e-12
 
     burn_in_steps: int | None = 100
@@ -34,7 +34,7 @@ class SamplerSpec:
     batch_size: int = Hyperparams.batch_size
     sampling_seed: int = 114514
     target_acceptance: float = 0.5
-    init_width: float = 1
+    init_width: float = 0.01
     sample_width: float = 0.02
     sample_width_adapt_freq: int = 100
     computation_dtype: str = "float32"

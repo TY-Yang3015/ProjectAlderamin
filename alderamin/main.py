@@ -59,7 +59,9 @@ def execute(config: PsiFormerConfig) -> None:
     plt.colorbar(scatter, label="z values")
 
     ax = plt.gca()
-    ax.scatter(pos[:, 1, 0], pos[:, 1, 1], c=z, cmap="viridis", s=1)
+    ax.scatter(pos[:, 1, 0], pos[:, 1, 1], c=z, cmap="viridis", s=0.1)
+    ax.set_xlim(-1, 3)
+    ax.set_ylim(-2, 2)
 
     plt.show()
 

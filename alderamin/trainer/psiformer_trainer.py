@@ -75,8 +75,13 @@ class PsiFormerTrainer:
         )
 
         # initialise optimiser
-        # self.optimiser = optax.adam(self.config.hyperparams.learning_rate)
-        self.optimiser = shampoo(self.config.hyperparams.learning_rate, block_size=128)
+        lr = optax.exponential_decay(init_value=self.config.hyperparams.learning_rate,
+                                     transition_steps=self.config.hyperparams.step,
+                                     transition_begin=1000,
+                                     decay_rate=0.95,
+                                     end_value=self.config.hyperparams.learning_rate / 2.)
+        self.optimiser = optax.adam(lr)
+        #self.optimiser = shampoo(self.config.hyperparams.learning_rate, block_size=128)
         self.optimiser = optax.chain(
             optax.clip_by_global_norm(self.config.hyperparams.gradient_clipping),
             self.optimiser,
