@@ -8,20 +8,22 @@ from .api import Array
 from .interpreter import forward_laplacian
 
 __all__ = [
-    'Laplacian',
-    'LaplacianOperator',
-    'ForwardLaplacianOperator',
-    'LoopLaplacianOperator',
-    'ParallelLaplacianOperator',
+    "Laplacian",
+    "LaplacianOperator",
+    "ForwardLaplacianOperator",
+    "LoopLaplacianOperator",
+    "ParallelLaplacianOperator",
 ]
 
 
 class Laplacian(Protocol):
-    def __call__(self, x: Array) -> tuple[Array, Array]: ...
+    def __call__(self, x: Array) -> tuple[Array, Array]:
+        ...
 
 
 class LaplacianOperator(Protocol):
-    def __call__(self, f: Callable[[Array], Array]) -> Laplacian: ...
+    def __call__(self, f: Callable[[Array], Array]) -> Laplacian:
+        ...
 
 
 @dataclass(frozen=True)

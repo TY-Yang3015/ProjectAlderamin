@@ -34,7 +34,7 @@ from .utils import (
     np_concatenate_brdcast,
 )
 
-R = TypeVar('R', bound=PyTree[Array])
+R = TypeVar("R", bound=PyTree[Array])
 
 
 def sparse_sum_jvp(
@@ -48,7 +48,7 @@ def sparse_sum_jvp(
     x_jac = laplace_args.jacobian[0]
 
     if axes is None:
-        axes = kwargs.get('axes')
+        axes = kwargs.get("axes")
     if axes is None:
         axes = tuple(range(x.ndim))
 
@@ -64,14 +64,14 @@ def sparse_sum_jvp(
     assert x_jac.x0_idx is not None
     axes_order = reduced_dims + non_reduced_axes
 
-    def compute_outdeps(arr: np.ndarray, axis: int): 
+    def compute_outdeps(arr: np.ndarray, axis: int):
         A_sorted = np.sort(arr, axis=axis)
         max_out = (np.diff(A_sorted, axis=axis) > 0).sum(axis).max() + 1
         # move axis to back so we can use vectorize
         A_sorted = np.moveaxis(A_sorted, axis, -1)
         with jax.ensure_compile_time_eval():
             unique = functools.partial(jnp.unique, size=max_out, fill_value=-1)
-            unique = jnp.vectorize(unique, signature='(n)->(m)')
+            unique = jnp.vectorize(unique, signature="(n)->(m)")
             idx_out = unique(A_sorted)
         idx_out = np.moveaxis(np.asarray(idx_out), -1, axis)
         return idx_out
@@ -81,7 +81,7 @@ def sparse_sum_jvp(
     idx_out = compute_outdeps(idx, axis=0)
     if idx_out.shape[0] > sparsity_threshold:
         logging.info(
-            f'Output ({idx_out.shape[0]}) reaches sparsity threshold ({sparsity_threshold}). Switching to dense.'
+            f"Output ({idx_out.shape[0]}) reaches sparsity threshold ({sparsity_threshold}). Switching to dense."
         )
         idx_out = None
         out_dim = np.max(idx) + 1
@@ -100,8 +100,8 @@ def sparse_sum_jvp(
     vmapped_axes = tuple(i for i in range(idx.ndim) if i not in repeated_dims and i > 0)
     new_order = (0, *vmapped_axes, *repeated_dims)
     inv_order = np.argsort(new_order)
-    
-    #idx = np.transpose(idx, new_order)[..., *[(0,) * len(repeated_dims)]]
+
+    # idx = np.transpose(idx, new_order)[..., *[(0,) * len(repeated_dims)]]
     idx = np.transpose(idx, new_order)
     idx = idx[..., (0,) * len(repeated_dims)]
     jac = jnp.transpose(jac, new_order)
@@ -133,7 +133,7 @@ def sparse_jvp(
         return dense_jvp(fwd, laplace_args, flags=flags, in_axes=in_axes)
 
     if axes is None:
-        axes = kwargs.get('axes')
+        axes = kwargs.get("axes")
     if axes is None:
         ndims = set(x.ndim for x in laplace_args.x)
         if len(ndims) != 1:
@@ -166,7 +166,7 @@ def sparse_jvp(
     grad_tan, out_mask = get_jacobian_for_reduction(laplace_args.jacobian, axes)
     if out_mask.shape[JAC_DIM] > sparsity_threshold:
         logging.info(
-            f'Output ({out_mask.shape[JAC_DIM]}) reaches sparsity threshold ({sparsity_threshold}). Switching to dense.'
+            f"Output ({out_mask.shape[JAC_DIM]}) reaches sparsity threshold ({sparsity_threshold}). Switching to dense."
         )
         return dense_jvp(fwd, laplace_args, flags=flags, in_axes=in_axes)
 
@@ -186,7 +186,7 @@ def sparse_jvp(
     lapl_y = tree_take(y_tangent, -1, axis=JAC_DIM)
 
     new_masks = broadcast_mask_to_jacobian(out_mask, grad_y)
-    assert grad_y.shape == new_masks.shape, f'{grad_y.shape} != {new_masks.shape}'
+    assert grad_y.shape == new_masks.shape, f"{grad_y.shape} != {new_masks.shape}"
 
     grad_y = jtu.tree_map(FwdJacobian, grad_y, new_masks)
     return y, grad_y, lapl_y
@@ -251,7 +251,7 @@ def sparse_diag_jvp(
     # We need to broadcast the output mask to the shape of the gradient in case the operation
     # included some broadcasting, e.g., (10, 1) * (5,) -> (10, 5)
     result_mask = broadcast_mask_to_jacobian(result_mask, grad_y)
-    assert grad_y.shape == result_mask.shape, f'{grad_y.shape} != {result_mask.shape}'
+    assert grad_y.shape == result_mask.shape, f"{grad_y.shape} != {result_mask.shape}"
 
     grad_y = jtu.tree_map(FwdJacobian, grad_y, result_mask)
     return y, grad_y, lapl_y
@@ -307,10 +307,10 @@ def sparse_index_jvp(
             mask = jtu.tree_map(lambda x: np.asarray(x, dtype=int), mask)
     except Exception as e:
         logging.warning(
-            f'Could not perform index operation {fwd_fn.__name__}. '
-            'This is most likely due to data dependent indexing. '
-            'We will default to materializing everything. Here is the caught exception:\n'
-            f'{e}'
+            f"Could not perform index operation {fwd_fn.__name__}. "
+            "This is most likely due to data dependent indexing. "
+            "We will default to materializing everything. Here is the caught exception:\n"
+            f"{e}"
         )
         return dense_jvp(merged_fwd, laplace_args, flags=flags, in_axes=in_axes)
 
@@ -357,18 +357,18 @@ def sparse_scatter_jvp(
         return y, grad_y, lapl_y
     if isinstance(operand, FwdLaplArray):
         logging.info(
-            'Scatter: operation on operand not supported. At the moment only segment sums are supported.'
+            "Scatter: operation on operand not supported. At the moment only segment sums are supported."
         )
         return dense_jvp(fwd, laplace_args, flags=flags, in_axes=in_axes)
 
-    dimension_numbers: jax.lax.ScatterDimensionNumbers = kwargs['dimension_numbers']
+    dimension_numbers: jax.lax.ScatterDimensionNumbers = kwargs["dimension_numbers"]
     if (
         dimension_numbers.inserted_window_dims != (0,)
         or dimension_numbers.scatter_dims_to_operand_dims != (0,)
         or dimension_numbers.update_window_dims != ()
     ):
         logging.info(
-            'Scatter: dimension numbers not supported. At the moment only segment sums are supported.'
+            "Scatter: dimension numbers not supported. At the moment only segment sums are supported."
         )
         return dense_jvp(fwd, laplace_args, flags=flags, in_axes=in_axes)
 
@@ -389,7 +389,7 @@ def sparse_scatter_jvp(
         out_mask = np.where(out_mask == np.iinfo(np.int32).max, -1, out_mask)
     if out_mask.shape[JAC_DIM] > sparsity_threshold:
         logging.info(
-            f'Scatter: Output ({out_mask.shape[JAC_DIM]}) reaches sparsity threshold ({sparsity_threshold}). Switching to dense.'
+            f"Scatter: Output ({out_mask.shape[JAC_DIM]}) reaches sparsity threshold ({sparsity_threshold}). Switching to dense."
         )
         return dense_jvp(fwd, laplace_args, flags=flags, in_axes=in_axes)
 
@@ -533,7 +533,7 @@ def get_jvp_function(
             new_extra = extra_args + static_args[:i] + static_args[i + 1 :]
 
             def new_merge(args: Sequence[Array], extra: Sequence[Array]):
-                assert len(args) == 1, 'Only one argument is expected.'
+                assert len(args) == 1, "Only one argument is expected."
                 extra, static = extra[:-n_static], extra[-n_static:]
                 return merge(tuple(static[:i] + (args[0],) + static[i:]), extra)
 

@@ -27,8 +27,8 @@ from .jvp import get_jvp_function
 from .tree_utils import tree_add
 from .utils import split_args
 
-R = TypeVar('R', bound=PyTree[Array])
-P = ParamSpec('P')
+R = TypeVar("R", bound=PyTree[Array])
+P = ParamSpec("P")
 
 
 def construct_fwd_laplacian_functions(
@@ -100,7 +100,7 @@ def wrap_forward_laplacian(
 
         # construct operation
         partial_fn = functools.partial(fn, **kwargs)
-        setattr(partial_fn, '__name__', name or getattr(fn, '__name__', 'partial'))
+        setattr(partial_fn, "__name__", name or getattr(fn, "__name__", "partial"))
         lapl_fns = construct_fwd_laplacian_functions(
             partial_fn,
             flags,
@@ -127,7 +127,7 @@ def wrap_forward_laplacian(
         # to reals, this might be wrong. It is guaranteed to be correct if complex numbers
         # only occur in intermediate steps.
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore', ComplexWarning)
+            warnings.simplefilter("ignore", ComplexWarning)
             return jax.tree_util.tree_map(
                 lambda x, jac, lapl: FwdLaplArray(x, jac, lapl).astype(x.dtype),
                 y,

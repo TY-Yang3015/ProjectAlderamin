@@ -16,9 +16,9 @@ from jax.util import safe_map
 def _bytes_from_dtype(dtype):
     import re
 
-    if str(dtype) == 'bool':
+    if str(dtype) == "bool":
         return 1
-    return int(re.findall(r'\d+', str(dtype))[0]) // 8
+    return int(re.findall(r"\d+", str(dtype))[0]) // 8
 
 
 class MemoryExprEnvironment:
@@ -96,21 +96,21 @@ def _compute_jaxpr_memory(
         invals = env.read_many(eqn.invars)
 
         sub_peak_mem = 0
-        if eqn.primitive.name == 'pjit':
-            sub_expr = eqn.params['jaxpr']
+        if eqn.primitive.name == "pjit":
+            sub_expr = eqn.params["jaxpr"]
             ans, sub_peak_mem, sub_tensors = _compute_jaxpr_memory(
                 sub_expr.jaxpr, sub_expr.literals, *invals, return_result=True
             )
             all_tensors += sub_tensors
-        elif eqn.primitive.name == 'scan':
-            n_carry, n_const = eqn.params['num_carry'], eqn.params['num_consts']
+        elif eqn.primitive.name == "scan":
+            n_carry, n_const = eqn.params["num_carry"], eqn.params["num_consts"]
             in_const, in_carry, in_inp = (
                 invals[:n_const],
                 invals[n_const : n_carry + n_const],
                 invals[n_const + n_carry :],
             )
             ans, sub_peak_mem, sub_tensors = _compute_jaxpr_memory(
-                eqn.params['jaxpr'].jaxpr,
+                eqn.params["jaxpr"].jaxpr,
                 (),
                 *in_const,
                 *in_carry,
@@ -145,12 +145,12 @@ def _compute_jaxpr_memory(
             reverse=True,
         )
         if not return_result and print_top_tensors:
-            print('Largest Tensors')
-            print('=' * 80)
+            print("Largest Tensors")
+            print("=" * 80)
             for t in all_tensors[:10]:
                 size = t[1].size * _bytes_from_dtype(t[1].dtype)
                 size_in_gb = size / 1024**3
-                print(t[2], f'{size_in_gb:.2f}GB', t[1].shape, t[1].dtype)
+                print(t[2], f"{size_in_gb:.2f}GB", t[1].shape, t[1].dtype)
 
         env.free_memory(eqn.invars, invals)
 
@@ -213,7 +213,7 @@ def compute_memory(
 
     # Print everything except the last line
     if len(output) > 1:
-        print('\n'.join(output[:-1]))
+        print("\n".join(output[:-1]))
 
     # Return the last line
     return int(output[-1])

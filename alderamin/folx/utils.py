@@ -25,7 +25,7 @@ from .api import (
     PyTree,
 )
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def bound_axis(arr: np.ndarray, axis):
@@ -50,7 +50,7 @@ def trace_of_product(mat1: Array, mat2: Array):
     """
     # ij,ij->... is a faster way to compute the trace than tr(mat1@mat2)
     # since one can rewrite the trace as sum_ij mat1_ij * mat2_ij
-    return jnp.einsum('...ij,...ij->...', mat1, mat2)
+    return jnp.einsum("...ij,...ij->...", mat1, mat2)
 
 
 def get_reduced_jacobians(*jacs: FwdJacobian, idx: Array | np.ndarray | None):
@@ -143,7 +143,7 @@ def broadcast_shapes_to_args(
         inp = tuple(i if i >= 0 else i + n_dim for i in inp)
         assert (
             max(*inp, -1, -1) < n_dim
-        ), f'axes {inp} out of bounds for array of shape {x.shape}'
+        ), f"axes {inp} out of bounds for array of shape {x.shape}"
         return inp
 
     flat_axes, tree_def = jtu.tree_flatten(axes, is_leaf=is_axes_def)
@@ -573,7 +573,7 @@ class LoggingPrefix(logging.Formatter):
         super().__init__()
 
     def format(self, record):
-        record.msg = f'{record.levelname}:[folx]{self.prefix} - {record.msg}'
+        record.msg = f"{record.levelname}:[folx]{self.prefix} - {record.msg}"
         return super().format(record)
 
     def __enter__(self):
@@ -586,7 +586,7 @@ class LoggingPrefix(logging.Formatter):
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is not None:
             logging.error(
-                'Exception occurred', exc_info=(exc_type, exc_value, traceback)
+                "Exception occurred", exc_info=(exc_type, exc_value, traceback)
             )
         logger = logging.getLogger()
         logger.handlers = self._old_handlers

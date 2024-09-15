@@ -53,8 +53,11 @@ class MultiHeadCrossAttention(nn.Module):
             )(x)
         else:
             x = nn.LayerNorm(
-                dtype=self.computation_dtype, param_dtype=self.param_dtype,
-                use_scale=False, use_bias=False, epsilon=1e-24
+                dtype=self.computation_dtype,
+                param_dtype=self.param_dtype,
+                use_scale=False,
+                use_bias=False,
+                epsilon=1e-24,
             )(x)
         shape = x.shape
 

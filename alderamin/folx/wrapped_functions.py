@@ -30,8 +30,8 @@ from .wrapper import (
     wrap_forward_laplacian,
 )
 
-R = TypeVar('R', bound=PyTree[Array])
-P = ParamSpec('P')
+R = TypeVar("R", bound=PyTree[Array])
+P = ParamSpec("P")
 
 
 @functools.partial(wrap_forward_laplacian, flags=FunctionFlags.INDEXING)
@@ -64,9 +64,9 @@ def dot_general(
     sparsity_threshold: int = 0,
 ) -> ArrayOrFwdLaplArray:
     lhs, rhs = args
-    dimension_numbers = kwargs['dimension_numbers']
-    precision = kwargs['precision']
-    preferred_element_type = kwargs['preferred_element_type']
+    dimension_numbers = kwargs["dimension_numbers"]
+    precision = kwargs["precision"]
+    preferred_element_type = kwargs["preferred_element_type"]
     # If we have regular arrays just do regular dot_general
     if not isinstance(lhs, FwdLaplArray) and not isinstance(rhs, FwdLaplArray):
         return jax.lax.dot_general_p.bind(
@@ -165,7 +165,7 @@ def dot_general(
     # computation and just use the regular dot product.
     def dot_last(lhs: Array, rhs: Array) -> Array:
         return jnp.einsum(
-            '...i,...i->...',
+            "...i,...i->...",
             lhs,
             rhs,
             precision=precision,
@@ -188,7 +188,7 @@ def dtype_conversion(
     kwargs: dict[str, Any],
     sparsity_threshold: int,
 ):
-    return args[0].astype(kwargs['new_dtype'])
+    return args[0].astype(kwargs["new_dtype"])
 
 
 @jax.custom_jvp
@@ -248,7 +248,7 @@ def slogdet_wrapper(
     if jax.dtypes.issubdtype(sign.dtype, jnp.complexfloating):
         sign_jac = sign.jacobian.data
         sign_jac_flat = sign_jac.reshape(-1, *sign.shape).imag
-        sign_jac_dot = jnp.einsum('i...,i...->...', sign_jac_flat, sign_jac_flat)
+        sign_jac_dot = jnp.einsum("i...,i...->...", sign_jac_flat, sign_jac_flat)
         sign = FwdLaplArray(
             sign.x,
             FwdJacobian(1.0j * sign.x * sign_jac.imag, x0_idx=sign.jacobian.x0_idx),
@@ -324,20 +324,20 @@ _LAPLACE_FN_REGISTRY: dict[Primitive | str, ForwardLaplacian] = {
     jax.lax.reduce_sum_p: wrap_forward_laplacian(
         jax.lax.reduce_sum_p.bind,
         flags=FunctionFlags.SUMMATION,
-        name='reduce_sum',
+        name="reduce_sum",
     ),
     jax.lax.reduce_max_p: wrap_forward_laplacian(
         jax.lax.reduce_max_p.bind,
         flags=FunctionFlags.REDUCTION | FunctionFlags.LINEAR,
-        name='reduce_max',
+        name="reduce_max",
     ),
     jax.lax.reduce_min_p: wrap_forward_laplacian(
         jax.lax.reduce_min_p.bind,
         flags=FunctionFlags.REDUCTION | FunctionFlags.LINEAR,
-        name='reduce_min',
+        name="reduce_min",
     ),
     jax.lax.reduce_prod_p: wrap_forward_laplacian(
-        jax.lax.reduce_prod_p.bind, flags=FunctionFlags.REDUCTION, name='reduce_prod'
+        jax.lax.reduce_prod_p.bind, flags=FunctionFlags.REDUCTION, name="reduce_prod"
     ),
     jax.lax.cumsum_p: wrap_forward_laplacian(
         jax.lax.cumsum, flags=FunctionFlags.LINEAR
@@ -369,20 +369,20 @@ _LAPLACE_FN_REGISTRY: dict[Primitive | str, ForwardLaplacian] = {
     jax.lax.dynamic_slice_p: wrap_forward_laplacian(
         jax.lax.dynamic_slice_p.bind,
         flags=FunctionFlags.INDEXING,
-        name='slice',
+        name="slice",
         index_static_args=slice(1, None),
     ),
     jax.lax.concatenate_p: wrap_forward_laplacian(
         jax.lax.concatenate_p.bind,
         flags=FunctionFlags.INDEXING,
-        name='concatenate',
+        name="concatenate",
         index_static_args=(),
     ),
     jax.lax.select_n_p: wrap_forward_laplacian(
         jax.lax.select_n, flags=FunctionFlags.INDEXING, index_static_args=(0,)
     ),
     jax.lax.gather_p: wrap_forward_laplacian(
-        jax.lax.gather_p.bind, flags=FunctionFlags.INDEXING, name='gather'
+        jax.lax.gather_p.bind, flags=FunctionFlags.INDEXING, name="gather"
     ),
     jax.lax.transpose_p: wrap_forward_laplacian(
         jax.lax.transpose, flags=FunctionFlags.INDEXING
@@ -400,24 +400,24 @@ _LAPLACE_FN_REGISTRY: dict[Primitive | str, ForwardLaplacian] = {
     jax.lax.scatter_p: wrap_forward_laplacian(
         jax.lax.scatter_p.bind,
         flags=FunctionFlags.INDEXING | FunctionFlags.SCATTER,
-        name='scatter',
+        name="scatter",
     ),
     # The current scatter implementation is frequently slower than the naive approach.
     # TODO: add scatter flag back in once the scatter implementation improves.
     jax.lax.scatter_add_p: wrap_forward_laplacian(
         jax.lax.scatter_add_p.bind,
         flags=FunctionFlags.LINEAR,
-        name='scatter_add',
+        name="scatter_add",
     ),
     jax.lax.scatter_max_p: wrap_forward_laplacian(
         jax.lax.scatter_max_p.bind,
         flags=FunctionFlags.LINEAR,
-        name='scatter_max',
+        name="scatter_max",
     ),
     jax.lax.scatter_min_p: wrap_forward_laplacian(
         jax.lax.scatter_min_p.bind,
         flags=FunctionFlags.LINEAR,
-        name='scatter_min',
+        name="scatter_min",
     ),
     jax.lax.stop_gradient_p: warp_without_fwd_laplacian(jax.lax.stop_gradient),
     jax.lax.eq_p: warp_without_fwd_laplacian(jax.lax.eq),
@@ -432,12 +432,12 @@ _LAPLACE_FN_REGISTRY: dict[Primitive | str, ForwardLaplacian] = {
     jax.lax.or_p: warp_without_fwd_laplacian(jax.lax.bitwise_or),
     jax.lax.is_finite_p: warp_without_fwd_laplacian(jax.lax.is_finite),
     jax.lax.convert_element_type_p: dtype_conversion,
-    'sign': warp_without_fwd_laplacian(jax.lax.sign),
-    'logaddexp': wrap_forward_laplacian(jnp.logaddexp, in_axes=()),
-    'sigmoid': wrap_forward_laplacian(jax.nn.sigmoid, in_axes=()),
-    'softplus': wrap_forward_laplacian(jax.nn.softplus, in_axes=()),
-    'silu': wrap_forward_laplacian(jax.nn.silu, in_axes=()),
-    'slogdet': slogdet_wrapper,
+    "sign": warp_without_fwd_laplacian(jax.lax.sign),
+    "logaddexp": wrap_forward_laplacian(jnp.logaddexp, in_axes=()),
+    "sigmoid": wrap_forward_laplacian(jax.nn.sigmoid, in_axes=()),
+    "softplus": wrap_forward_laplacian(jax.nn.softplus, in_axes=()),
+    "silu": wrap_forward_laplacian(jax.nn.silu, in_axes=()),
+    "slogdet": slogdet_wrapper,
 }
 
 
@@ -465,13 +465,15 @@ def is_registered(primitive_or_name: Primitive | str) -> bool:
 @overload
 def get_laplacian(
     primitive_or_name: Primitive, wrap_if_missing: Literal[True]
-) -> ForwardLaplacian: ...
+) -> ForwardLaplacian:
+    ...
 
 
 @overload
 def get_laplacian(
     primitive_or_name: Primitive | str, wrap_if_missing: Literal[False] = False
-) -> ForwardLaplacian | None: ...
+) -> ForwardLaplacian | None:
+    ...
 
 
 def get_laplacian(
@@ -490,7 +492,7 @@ def get_laplacian(
     if wrap_if_missing:
         if isinstance(primitive_or_name, Primitive):
             logging.warning(
-                f'{primitive_or_name} not in registry. The following call might be slow as we will compute the full hessian.'
+                f"{primitive_or_name} not in registry. The following call might be slow as we will compute the full hessian."
             )
             return wrap_forward_laplacian(primitive_or_name.bind)
         else:

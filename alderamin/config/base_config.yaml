@@ -33,7 +33,4 @@ psiformer:
 ckpt:
   save_ckpt: true
   ckpt_freq: 1000
-
-  load_ckpt_dir: null
-  load_config: true
-  ckpt_step: null
+  save_num_ckpt: 5

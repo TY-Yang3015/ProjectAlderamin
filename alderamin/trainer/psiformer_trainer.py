@@ -4,30 +4,33 @@ from clu import metric_writers
 from jax import random
 from jax.lib import xla_bridge
 from functools import partial
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import jax
 import logging
 import optax
+import hydra
+import os
+import orbax.checkpoint as ocp
 
 import alderamin.folx as folx
 from alderamin.shampoo.distributed_shampoo import distributed_shampoo as shampoo
 from alderamin.backbone.models import PsiFormer
 from alderamin.data import GlobalSystem
 from alderamin.sampler import MetropolisHastingSampler
+from alderamin.util import log_histograms
 
-
-writer = metric_writers.create_default_writer()
-writer.write_histograms()
 
 class PsiFormerTrainer:
     def __init__(self, config: DictConfig, system: GlobalSystem):
         self.config = config
 
+        logger = logging.getLogger("main")
+        logger.setLevel(logging.INFO)
         # log environment information
-        logging.info(f"JAX backend: {xla_bridge.get_backend().platform}")
+        logger.info(f"JAX backend: {xla_bridge.get_backend().platform}")
 
-        logging.info(f"JAX process: {jax.process_index() + 1} / {jax.process_count()}")
-        logging.info(f"JAX local devices: {jax.local_devices()}")
+        logger.info(f"JAX process: {jax.process_index() + 1} / {jax.process_count()}")
+        logger.info(f"JAX local devices: {jax.local_devices()}")
 
         # create sampler
         self.sampler = MetropolisHastingSampler(
@@ -85,17 +88,25 @@ class PsiFormerTrainer:
             decay_rate=0.95,
             end_value=self.config.hyperparam.learning_rate / 2.0,
         )
-        #self.optimiser = optax.adam(lr)
-        self.optimiser = shampoo(self.config.hyperparam.learning_rate,
-                                 block_size=128,
-                                 diagonal_epsilon=1e-12,
-                                 matrix_epsilon=1e-12)
+        # self.optimiser = optax.adam(lr)
+        self.optimiser = shampoo(
+            self.config.hyperparam.learning_rate,
+            block_size=128,
+            diagonal_epsilon=1e-12,
+            matrix_epsilon=1e-12,
+        )
         self.optimiser = optax.chain(
             optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
             self.optimiser,
             # optax.add_decayed_weights(weight_decay=1e-4),
             optax.ema(0.99),
         )
+
+    def _init_savedir(self) -> str:
+        save_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+        save_dir = str(os.path.join(save_dir, "results"))
+        os.makedirs(save_dir)
+        return save_dir
 
     @partial(jax.jit, static_argnums=0)
     def _train_step(self, batch, state):
@@ -154,18 +165,9 @@ class PsiFormerTrainer:
 
             electric_term = get_electric_hamiltonian(batch)
 
-            # jacobian_op = jax.grad(get_wavefunction)
-            # jacobian = jax.vmap(jacobian_op)(batch)
-
-            # laplacian_op = jax.grad(lambda x: jnp.sum(jacobian_op(x)))
-            # laplacian = jax.vmap(laplacian_op)(batch)
-
             laplacian_op = folx.forward_laplacian(get_wavefunction)
             result = jax.vmap(laplacian_op)(batch)
             laplacian, jacobian = result.laplacian, result.jacobian.dense_array
-
-            # print(jacobian.shape)
-            # print(laplacian.shape)
 
             kinetic_term = -laplacian * 0.5
 
@@ -189,7 +191,7 @@ class PsiFormerTrainer:
         energy, grads = jax.value_and_grad(get_energy)(state.params)
         state = state.apply_gradients(grads=grads)
 
-        return state, energy
+        return state, energy, grads
 
     def train(self):
 
@@ -212,13 +214,54 @@ class PsiFormerTrainer:
             tx=self.optimiser,
         )
 
+        sharding = jax.sharding.NamedSharding(
+            mesh=jax.sharding.Mesh(jax.devices(), axis_names="model"),
+            spec=jax.sharding.PartitionSpec(),
+        )
+
+        create_sharded_array = lambda x: jax.device_put(x, sharding)
+        state = jax.tree_util.tree_map(create_sharded_array, state)
+
+        save_dir = self._init_savedir()
+
+        if self.config.ckpt.save_ckpt:
+            save_vae_path = ocp.test_utils.erase_and_create_empty(
+                os.path.abspath(save_dir + "/ckpt")
+            )
+
+            save_options = ocp.CheckpointManagerOptions(
+                max_to_keep=self.config.ckpt.save_num_ckpt,
+                save_interval_steps=self.config.ckpt.ckpt_freq,
+            )
+
+            mngr = ocp.CheckpointManager(
+                save_vae_path, options=save_options, item_names=("state", "config")
+            )
+
+        writer = metric_writers.SummaryWriter(logdir=save_dir)
+        logger = logging.getLogger("loop")
+
         for step in range(self.config.hyperparam.step):
             batch = self.sampler.sample_psiformer(
                 state, self.config.sampler.sample_steps
             )
-            # batch = self.sampler.walker_state.positions
-            state, energy = self._train_step(batch, state)
-            # print(batch[0, 0, :])
-            logging.info(f"step: {step} " f"energy: {energy}" f"")
+            state, energy, grad = self._train_step(batch, state)
+
+            if self.config.ckpt.save_ckpt:
+                config_dict = OmegaConf.to_container(self.config, resolve=True)
+                mngr.save(
+                    step,
+                    args=ocp.args.Composite(
+                        state=ocp.args.StandardSave(state),
+                        config=ocp.args.JsonSave(config_dict),
+                    ),
+                )
+
+            log_histograms(writer, state.params, grad, step)
+            writer.write_scalars(step, {"energy": energy})
+
+            logger.info(f"step: {step} " f"energy: {energy}" f"")
+
+        writer.flush()
 
         return state

@@ -24,8 +24,8 @@ from .api import (
 from .utils import LoggingPrefix, extract_jacobian_mask, ravel
 from .wrapped_functions import get_laplacian, wrap_forward_laplacian
 
-R = TypeVar('R', bound=PyTree[Array])
-P = ParamSpec('P')
+R = TypeVar("R", bound=PyTree[Array])
+P = ParamSpec("P")
 
 
 class JaxExprEnvironment:
@@ -84,7 +84,7 @@ def eval_jaxpr_with_forward_laplacian(
     env = JaxExprEnvironment(jaxpr, consts, *args)
 
     def eval_scan(eqn: core.JaxprEqn, invals):
-        n_carry, n_const = eqn.params['num_carry'], eqn.params['num_consts']
+        n_carry, n_const = eqn.params["num_carry"], eqn.params["num_consts"]
         in_const, in_carry, in_inp = (
             invals[:n_const],
             invals[n_const : n_carry + n_const],
@@ -93,11 +93,11 @@ def eval_jaxpr_with_forward_laplacian(
         carry_merge = extract_jacobian_mask(in_carry)
         assert all(
             isinstance(x, Array) for x in in_inp
-        ), 'Scan does not support scanning over input depenedent tensors.\nPlease unroll the loop.'
+        ), "Scan does not support scanning over input depenedent tensors.\nPlease unroll the loop."
 
         def wrapped(carry, x):
             result = eval_jaxpr_with_forward_laplacian(
-                eqn.params['jaxpr'].jaxpr,
+                eqn.params["jaxpr"].jaxpr,
                 (),
                 *in_const,
                 *carry_merge(carry),
@@ -110,17 +110,17 @@ def eval_jaxpr_with_forward_laplacian(
         # Check whether jacobian sparsity matches
         for a, b in zip(in_carry, first_carry):
             if not isinstance(a, type(b)):
-                raise TypeError(f'Type mismatch in scan: {type(a)} != {type(b)}')
+                raise TypeError(f"Type mismatch in scan: {type(a)} != {type(b)}")
             if isinstance(a, FwdLaplArray):
                 if not np.all(a.jacobian.x0_idx == b.jacobian.x0_idx):  # type: ignore
-                    raise ValueError('Jacobian sparsity mismatch in scan.')
+                    raise ValueError("Jacobian sparsity mismatch in scan.")
         carry, y = jax.lax.scan(
             wrapped,  # type: ignore
             in_carry,
             in_inp,
-            length=eqn.params['length'],
-            reverse=eqn.params['reverse'],
-            unroll=eqn.params['unroll'],
+            length=eqn.params["length"],
+            reverse=eqn.params["reverse"],
+            unroll=eqn.params["unroll"],
         )
         carry = [
             a._replace(jacobian=a.jacobian._replace(x0_idx=b.jacobian.x0_idx))  # type: ignore
@@ -137,14 +137,14 @@ def eval_jaxpr_with_forward_laplacian(
         return *carry, *y
 
     def eval_pjit(eqn: core.JaxprEqn, invals):
-        name = eqn.params['name']
+        name = eqn.params["name"]
         if fn := get_laplacian(name):
             # TODO: this is a bit incomplete, e.g., kwargs?
             outvals = fn(invals, {}, sparsity_threshold=sparsity_threshold)
             if isinstance(outvals, (FwdLaplArray, Array)):
                 outvals = [outvals]  # TODO: Figure out how to properly handle outvals
             return outvals
-        sub_expr: core.ClosedJaxpr = eqn.params['jaxpr']
+        sub_expr: core.ClosedJaxpr = eqn.params["jaxpr"]
         return eval_jaxpr_with_forward_laplacian(
             sub_expr.jaxpr,
             sub_expr.literals,
@@ -155,14 +155,14 @@ def eval_jaxpr_with_forward_laplacian(
     def eval_custom_jvp(eqn: core.JaxprEqn, invals):
         subfuns, args = eqn.primitive.get_bind_params(eqn.params)
         fn = functools.partial(eqn.primitive.bind, *subfuns, **args)
-        with LoggingPrefix(f'({summarize(eqn.source_info)})'):
+        with LoggingPrefix(f"({summarize(eqn.source_info)})"):
             return wrap_forward_laplacian(fn)(
                 invals, {}, sparsity_threshold=sparsity_threshold
             )
 
     def eval_laplacian(eqn: core.JaxprEqn, invals):
         subfuns, params = eqn.primitive.get_bind_params(eqn.params)
-        with LoggingPrefix(f'({summarize(eqn.source_info)})'):
+        with LoggingPrefix(f"({summarize(eqn.source_info)})"):
             fn = get_laplacian(eqn.primitive, True)
             return fn(
                 (*subfuns, *invals), params, sparsity_threshold=sparsity_threshold
@@ -189,26 +189,26 @@ def eval_jaxpr_with_forward_laplacian(
                                 *subfuns, *invals, **bind_params
                             )
                     except Exception as e:
-                        with LoggingPrefix(f'({summarize(eqn.source_info)})'):
+                        with LoggingPrefix(f"({summarize(eqn.source_info)})"):
                             logging.warning(
-                                f'Could not perform operation {eqn.primitive.name} in eager execution despite it only depending on non-input dependent values. '
-                                'We switch to tracing rather than eager execution. This may impact sparsity propagation.\n'
-                                f'{e}'
+                                f"Could not perform operation {eqn.primitive.name} in eager execution despite it only depending on non-input dependent values. "
+                                "We switch to tracing rather than eager execution. This may impact sparsity propagation.\n"
+                                f"{e}"
                             )
                         outvals = eqn.primitive.bind(*subfuns, *invals, **bind_params)
                 else:
                     outvals = eqn.primitive.bind(*subfuns, *invals, **bind_params)
-            elif eqn.primitive.name == 'scan':
+            elif eqn.primitive.name == "scan":
                 outvals = eval_scan(eqn, invals)
-            elif eqn.primitive.name == 'pjit':
+            elif eqn.primitive.name == "pjit":
                 outvals = eval_pjit(eqn, invals)
-            elif eqn.primitive.name == 'custom_jvp_call':
+            elif eqn.primitive.name == "custom_jvp_call":
                 outvals = eval_custom_jvp(eqn, invals)
             else:
                 outvals = eval_laplacian(eqn, invals)
         except Exception as e:
-            with LoggingPrefix(f'({summarize(eqn.source_info)})'):
-                logging.error(f'Error in operation {eqn.primitive.name}.')
+            with LoggingPrefix(f"({summarize(eqn.source_info)})"):
+                logging.error(f"Error in operation {eqn.primitive.name}.")
             raise e
 
         # unify output
@@ -241,7 +241,7 @@ def init_forward_laplacian_state(
     jac_idx = unravel(np.arange(x_flat.shape[0]))
     if jnp.iscomplexobj(x_flat):
         logging.info(
-            '[folx] Found complex input. This is not well supported, results might be wrong.'
+            "[folx] Found complex input. This is not well supported, results might be wrong."
         )
     if sparsity:
         jacobian = jtu.tree_map(FwdJacobian, jac, jac_idx)

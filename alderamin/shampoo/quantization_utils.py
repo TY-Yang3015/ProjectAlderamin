@@ -26,13 +26,14 @@ import jax.numpy as jnp
 @struct.dataclass
 class QuantizedValue:
     """State associated with quantized value."""
+
     quantized: chex.Array
     diagonal: chex.Array  # Diagonal (if extract_diagonal is set)
     bucket_size: chex.Array
     quantized_dtype: jnp.dtype = struct.field(
-        pytree_node=False)  # Dtype for the quantized value.
-    extract_diagonal: bool = struct.field(
-        pytree_node=False)  # In case its centered.
+        pytree_node=False
+    )  # Dtype for the quantized value.
+    extract_diagonal: bool = struct.field(pytree_node=False)  # In case its centered.
     shape: Any = struct.field(pytree_node=False)  # Shape of the tensor.
 
     @classmethod
@@ -40,10 +41,16 @@ class QuantizedValue:
         if isinstance(fvalue, list) and not fvalue:
             return QuantizedValue([], [], [], quantized_dtype, extract_diagonal, [])
         quantized, diagonal_fvalue, bucket_size = QuantizedValue.quantize(
-            fvalue, quantized_dtype, extract_diagonal)
-        return QuantizedValue(quantized, diagonal_fvalue, bucket_size,
-                              quantized_dtype, extract_diagonal,
-                              list(quantized.shape))
+            fvalue, quantized_dtype, extract_diagonal
+        )
+        return QuantizedValue(
+            quantized,
+            diagonal_fvalue,
+            bucket_size,
+            quantized_dtype,
+            extract_diagonal,
+            list(quantized.shape),
+        )
 
     # Quantization is from Lingvo JAX optimizers.
     # We extend it for int16 quantization of PSD matrices.
@@ -63,12 +70,13 @@ class QuantizedValue:
             # value -32768 is not used.
             num_buckets = jnp.array(32767.0, dtype=float_dtype)
         else:
-            raise ValueError(f'Quantized dtype {quantized_dtype} not supported.')
+            raise ValueError(f"Quantized dtype {quantized_dtype} not supported.")
         # max value is mapped to num_buckets
 
         if extract_diagonal and fvalue.ndim != 2:
             raise ValueError(
-                f'Input array {fvalue} must be 2D to work with extract_diagonal.')
+                f"Input array {fvalue} must be 2D to work with extract_diagonal."
+            )
 
         diagonal_fvalue = []
         if extract_diagonal:
@@ -81,15 +89,17 @@ class QuantizedValue:
         # We first decide the scale.
         if fvalue.ndim < 1:
             raise ValueError(
-                f'Input array {fvalue} must have a strictly positive number of '
-                'dimensions.')
+                f"Input array {fvalue} must have a strictly positive number of "
+                "dimensions."
+            )
 
         max_abs = jnp.max(jnp.abs(fvalue), axis=0)
         bucket_size = max_abs / num_buckets
         bs_expanded = bucket_size[jnp.newaxis, Ellipsis]
         # To avoid divide by 0.0
-        bs_nonzero = jnp.where(bs_expanded > 0.0, bs_expanded,
-                               jnp.ones_like(bs_expanded))
+        bs_nonzero = jnp.where(
+            bs_expanded > 0.0, bs_expanded, jnp.ones_like(bs_expanded)
+        )
         ratio = fvalue / bs_nonzero
         # We use rounding to remove bias.
         quantized = jnp.round(ratio)

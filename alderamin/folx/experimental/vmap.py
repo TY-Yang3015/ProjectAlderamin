@@ -8,7 +8,7 @@ from folx.vmap import batched_vmap
 
 from .memory import compute_memory
 
-F = TypeVar('F', bound=Callable)
+F = TypeVar("F", bound=Callable)
 
 
 def auto_batched_vmap(
@@ -33,7 +33,7 @@ def auto_batched_vmap(
     Returns:
         The batched function.
     """
-    mem = jax.devices()[0].memory_stats()['bytes_limit']  # type: ignore
+    mem = jax.devices()[0].memory_stats()["bytes_limit"]  # type: ignore
     target_mem = mem * max_fraction
 
     vmapped_fn = functools.partial(batched_vmap, fn, in_axes=in_axes, out_axes=out_axes)
@@ -66,8 +66,8 @@ def auto_batched_vmap(
                 max_samples = max(max_samples, 1)
             return vmapped_fn(max_samples)(*args, **kwargs)
         except Exception as e:
-            logging.warn(f'Failed to auto batch {fn.__name__}: {e}')
-            logging.warn('Defaulting to batch size 1.')
+            logging.warn(f"Failed to auto batch {fn.__name__}: {e}")
+            logging.warn("Defaulting to batch size 1.")
             return vmapped_fn(max_batch_size=1)(*args, **kwargs)
 
     return result

@@ -110,7 +110,7 @@ def off_diagblock_jac_hessian_jac(
 ):
     # if we know that a function is linear in one arguments, it's hessian must be off diagonal
     # thus we can safe some computation by only computing the off diagonal part of the hessian.
-    assert len(args) == 2, 'Off diag hessian only supports 2 args at the moment.'
+    assert len(args) == 2, "Off diag hessian only supports 2 args at the moment."
 
     def flat_arr(x: FwdLaplArray) -> Array:
         return jfu.ravel_pytree(x.x)[0]
@@ -139,7 +139,7 @@ def dot_product_jac_hessian_jac(
     # [0, I]
     # [I, 0]
     # where I is the identity matrix of the same shape as the input.
-    assert len(args) == 2, 'Dot product only supports two args.'
+    assert len(args) == 2, "Dot product only supports two args."
     lhs, rhs = args.jacobian
     flat_out = 2 * trace_jac_jacT(lhs, rhs, shared_idx)[None]
     unravel = jfu.ravel_pytree(fn(*args.x))[1]
@@ -232,9 +232,9 @@ def find_out_idx(lapl_args: FwdLaplArgs, in_axes, flags: FunctionFlags, threshol
             arrs = np.asarray(idx_fn(inp), dtype=int)
         except jaxlib.xla_extension.XlaRuntimeError:
             logging.info(
-                'Failed to find unique elements on GPU, falling back to CPU. This will be slow.'
+                "Failed to find unique elements on GPU, falling back to CPU. This will be slow."
             )
-            with jax.default_device(jax.devices('cpu')[0]):
+            with jax.default_device(jax.devices("cpu")[0]):
                 arrs = np.asarray(idx_fn(inp), dtype=int)
         filtered_arrs = remove_fill(arrs, False)
 

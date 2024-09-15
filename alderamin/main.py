@@ -21,7 +21,6 @@ def execute(config: DictConfig) -> None:
 
     jax.config.update("jax_debug_nans", True)
     # jax.config.update("jax_enable_x64", True)
-    logging.basicConfig(level=logging.INFO)
     trainer = PsiFormerTrainer(config, e)
 
     pos = trainer.sampler.walker_state.positions

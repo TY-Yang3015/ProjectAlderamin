@@ -32,7 +32,7 @@ def slogdet_jac_hessian_jac(
 
     def elementwise(A_inv, J):
         # We can do better and compute the trace more efficiently.
-        A_inv_J = jnp.einsum('ij,jdk->idk', A_inv, J)
+        A_inv_J = jnp.einsum("ij,jdk->idk", A_inv, J)
         trace = -trace_of_product(
             jnp.transpose(A_inv_J, (1, 0, 2)).reshape(-1, x0_dim),
             A_inv_J.reshape(-1, x0_dim),
@@ -85,9 +85,9 @@ def div_jac_hessian_jac(
     materialize_idx: Array | None,
 ):
     total_args = merge(args.x, extra_args)  # type: ignore
-    assert len(total_args) == 2, 'Div requires two arguments'
+    assert len(total_args) == 2, "Div requires two arguments"
     x, y = total_args
-    assert x.shape == y.shape == (), 'Div requires two scalars'
+    assert x.shape == y.shape == (), "Div requires two scalars"
 
     if len(args.x) == 2:
         lhs_grad, rhs_grad = get_reduced_jacobians(*args.jacobian, idx=materialize_idx)
