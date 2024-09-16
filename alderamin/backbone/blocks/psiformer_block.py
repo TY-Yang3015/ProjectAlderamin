@@ -23,6 +23,7 @@ class PsiFormerBlock(nn.Module):
     num_heads: int
     use_memory_efficient_attention: bool
     kernel_init: nn.initializers.Initializer
+    bias_init: nn.initializers.Initializer
     use_norm: bool
     group: None | int = None
 
@@ -50,7 +51,7 @@ class PsiFormerBlock(nn.Module):
                 features=x.shape[-1],
                 use_bias=True,
                 kernel_init=self.kernel_init,
-                bias_init=nn.initializers.normal(1),
+                bias_init=self.bias_init,
                 dtype=self.computation_dtype,
                 param_dtype=self.param_dtype,
             )(h)

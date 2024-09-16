@@ -76,16 +76,15 @@ class PsiFormer(nn.Module):
                     :, i, j, :3
                 ].set(coordinates[:, i, :] - self.nuc_positions[j, :])
                 electron_nuclear_features = electron_nuclear_features.at[
-                    :, i, j, -1
+                    :, i, j, 3
                 ].set(
                     jnp.linalg.norm(
                         coordinates[:, i, :] - self.nuc_positions[j, :], axis=-1
                     )
-                    + 1e-12
                 )
 
         spins_reshaped = repeat(
-            self.spins, f"e -> {coordinates.shape[0]} " f"e {len(self.nuc_positions)} 1"
+            self.spins, f"e -> {coordinates.shape[0]} e {len(self.nuc_positions)} 1"
         )
 
         electron_nuclear_features = jnp.concatenate(
@@ -127,7 +126,7 @@ class PsiFormer(nn.Module):
             use_bias=False,
             dtype=self.computation_dtype,
             param_dtype=self.param_dtype,
-            kernel_init=nn.initializers.normal(1),
+            kernel_init=nn.initializers.normal(),
         )(x)
 
         for _ in range(self.num_of_blocks):
@@ -138,12 +137,13 @@ class PsiFormer(nn.Module):
                 group=self.group,
                 param_dtype=self.param_dtype,
                 computation_dtype=self.computation_dtype,
-                kernel_init=nn.initializers.normal(1),
+                kernel_init=nn.initializers.normal(),
+                bias_init=nn.initializers.normal(),
             )(x)
 
         psiformer_pre_det = nn.Dense(
             features=self.num_of_electrons * self.num_of_determinants,
-            kernel_init=nn.initializers.normal(1),
+            kernel_init=nn.initializers.normal(),
             use_bias=False,
             dtype=self.computation_dtype,
             param_dtype=self.param_dtype,
@@ -161,7 +161,7 @@ class PsiFormer(nn.Module):
 
         wavefunction *= jnp.exp(jastrow_factor)
 
-        return wavefunction
+        return jnp.log(jnp.abs(wavefunction))
 
 
 """
@@ -176,6 +176,6 @@ print(PsiFormer(num_of_determinants=6,
                 scale_input=True,
                 spins=jnp.array([-1, 1]),
                 nuc_positions=jnp.array([[1, 0, 0], [0, 0, 0]])).tabulate(jax.random.PRNGKey(0),
-                                       jnp.ones((512, 6)),
+                                       jnp.ones((512, 2, 3)),
                                        depth=1, console_kwargs={'width': 150}))
 #"""

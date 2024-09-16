@@ -10,9 +10,6 @@ from tqdm import tqdm
 from alderamin.data import GlobalSystem
 
 
-# TODO: numerical precision control
-
-
 @struct.dataclass
 class WalkerState:
     positions: jnp.ndarray
@@ -75,7 +72,7 @@ class MetropolisHastingSampler:
 
         self.walker_state = self.initialise_walkers()
 
-        self.global_memory: jnp.array = jnp.array([])
+        self.global_memory: jnp.array = jnp.array([]).reshape(0, 1)
 
     def initialise_walkers(self) -> WalkerState:
         init_positions: jnp.ndarray = (
@@ -124,7 +121,6 @@ class MetropolisHastingSampler:
         sign, logdet = jnp.linalg.slogdet(sigma)
 
         # solve for the Mahalanobis distance
-        # TODO: remove inverse for stability
         sigma_inv = jnp.linalg.inv(sigma)
         mahalanobis_term = jnp.einsum(
             "ijk,kl,ijl->ij", diff, sigma_inv, diff
@@ -185,8 +181,10 @@ class MetropolisHastingSampler:
     def _adapt_step_size(
         self, memory: jnp.ndarray, walker_state: WalkerState
     ) -> tuple[jnp.ndarray, WalkerState]:
-        accept_rate = jnp.sum(memory) / len(memory)
-        new_size = walker_state.step_size * jnp.where(
+        memory = memory.reshape(self.batch_size, -1)
+        accept_rate = jnp.sum(memory, axis=-1) / memory.shape[-1]
+        accept_rate = accept_rate.reshape(accept_rate.shape[0], 1, 1)
+        new_size = walker_state.step_size / jnp.where(
             accept_rate < jnp.min(self.acceptance_range),
             1.1, 1.
         )
@@ -216,15 +214,15 @@ class MetropolisHastingSampler:
     ) -> tuple[WalkerState, jnp.ndarray]:
         walker_state, proposed_positions = walker_state.propose()
 
-        current_log_prob = jnp.log(
-            jnp.square(
+        current_log_prob = 2 * (
+            (
                 psiformer_train_state.apply_fn(
                     {"params": psiformer_train_state.params}, walker_state.positions
                 )
             )
         )
-        proposed_log_prob = jnp.log(
-            jnp.square(
+        proposed_log_prob = 2 * (
+            (
                 psiformer_train_state.apply_fn(
                     {"params": psiformer_train_state.params}, proposed_positions
                 )
@@ -232,7 +230,7 @@ class MetropolisHastingSampler:
         )
         log_ratio = proposed_log_prob - current_log_prob
 
-        accept_probs = jnp.exp(log_ratio)
+        accept_probs = jnp.exp(log_ratio)  # (batch, 1)
         # print(accept_probs.mean())
 
         accept_probs = jnp.minimum(accept_probs, jnp.ones_like(accept_probs)).squeeze(

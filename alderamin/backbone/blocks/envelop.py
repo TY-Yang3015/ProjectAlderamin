@@ -7,7 +7,7 @@ import jax
 
 
 def custom_initializer(key, shape, dtype=jnp.float32):
-    return jax.random.normal(key, shape, dtype) * 0.05 + 1.0
+    return jax.random.normal(key, shape, dtype) * 0.1 + 10.
 
 
 class Envelop(nn.Module):
@@ -73,10 +73,10 @@ class Envelop(nn.Module):
         # k i 1 I, b k i j I -> b k i j
         matrix_element_omega = (self.pi_kiI * jnp.exp(-exponent)).sum(axis=-1)
 
-        # b k i j -> b k
+        # b k i j -> b k i j
         determinants = psiformer_pre_det * matrix_element_omega
 
-        # b k -> b 1
+        # b k i j -> b 1
         wavefunction = jnp.linalg.det(determinants).sum(axis=-1).reshape(-1, 1)
 
         return wavefunction

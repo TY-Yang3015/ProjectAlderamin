@@ -1,7 +1,7 @@
 from flax.training.train_state import TrainState
 import jax.numpy as jnp
 from clu import metric_writers
-from jax import random
+from jax import random, tree_map
 from jax.lib import xla_bridge
 from functools import partial
 from omegaconf import DictConfig, OmegaConf
@@ -82,24 +82,27 @@ class PsiFormerTrainer:
         )
 
         # initialise optimiser
-        lr = optax.exponential_decay(
-            init_value=self.config.hyperparam.learning_rate,
-            transition_steps=self.config.hyperparam.step,
-            transition_begin=1000,
-            decay_rate=0.95,
-            end_value=self.config.hyperparam.learning_rate / 2.0,
-        )
-        self.optimiser = optax.adam(lr)
-        #self.optimiser = shampoo(
-        #    lr,
-        #    block_size=128,
-        #    diagonal_epsilon=1e-12,
-        #    matrix_epsilon=1e-12,
-        #)
+        def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
+            return self.config.hyperparam.learning_rate * jnp.power(
+                (1.0 / (1.0 + (t_ / self.config.hyperparam.delay))), self.config.hyperparam.decay)
+
+        if self.config.hyperparam.optimiser.casefold() == 'adam':
+            self.optimiser = optax.adam(learning_rate=learning_rate_schedule)
+        elif self.config.hyperparam.optimiser.casefold() == 'shampoo':
+            self.optimiser = shampoo(
+                self.config.hyperparam.learning_rate,
+                block_size=128,
+                diagonal_epsilon=1e-12,
+                matrix_epsilon=1e-12,
+            )
+        else:
+            raise NotImplementedError(f"optimiser {self.config.hyperparam.optimiser} not available.")
+
         self.optimiser = optax.chain(
             optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
             self.optimiser,
-            # optax.add_decayed_weights(weight_decay=1e-4),
+            #optax.scale_by_schedule(learning_rate_schedule),
+            #optax.scale(-1.)
         )
 
     def _init_savedir(self) -> str:
@@ -130,13 +133,13 @@ class PsiFormerTrainer:
                 for i in range(self.num_of_electrons):
                     elec_nuc_term = elec_nuc_term.at[:, 0].add(
                         (
-                            self.nuc_charges[I]
-                            / (
-                                jnp.linalg.norm(
-                                    coordinates[:, i, :] - self.nuc_positions[I, :],
-                                    axis=-1,
+                                self.nuc_charges[I]
+                                / (
+                                    jnp.linalg.norm(
+                                        coordinates[:, i, :] - self.nuc_positions[I, :],
+                                        axis=-1,
+                                    )
                                 )
-                            )
                         )
                     )
 
@@ -151,7 +154,7 @@ class PsiFormerTrainer:
 
             return elec_elec_term - elec_nuc_term + nuc_nuc_term
 
-        def get_energy(params):
+        def get_energy_and_grad(params):
             def get_wavefunction(raw_batch):
                 wavefunction = state.apply_fn(
                     {"params": params},
@@ -159,7 +162,7 @@ class PsiFormerTrainer:
                 )
 
                 if wavefunction.shape == (1, 1):
-                    wavefunction = jnp.float32(wavefunction[0][0])
+                    wavefunction = wavefunction[0][0]
 
                 return wavefunction
 
@@ -168,13 +171,19 @@ class PsiFormerTrainer:
             laplacian_op = folx.forward_laplacian(get_wavefunction)
             result = jax.vmap(laplacian_op)(batch)
             laplacian, jacobian = result.laplacian, result.jacobian.dense_array
+            kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.
 
-            kinetic_term = -laplacian * 0.5
+            #jacobian_op = jax.grad(get_wavefunction)
+            #jacobian = jax.vmap(jacobian_op)(batch)
+            #laplacian_op = jax.grad(lambda x: jacobian_op(x).sum())
+            #laplacian = jax.vmap(laplacian_op)(batch)
+            #kinetic_term = -(laplacian.sum(axis=(-1, -2))
+            #                 ) / 2.
 
-            kinetic_term = kinetic_term.reshape(-1, 1) / get_wavefunction(batch)
+            kinetic_term = kinetic_term.reshape(-1, 1)
 
-            energy_batch = electric_term + kinetic_term
-            energy_batch = jnp.clip(energy_batch, None, 1.0)
+            energy_batch = kinetic_term + electric_term
+            #energy_batch = jnp.clip(energy_batch, None, 0.)
 
             mean_absolute_deviation = jnp.mean(
                 jnp.abs(energy_batch - jnp.median(energy_batch))
@@ -186,17 +195,44 @@ class PsiFormerTrainer:
                 jnp.median(energy_batch) + (n * mean_absolute_deviation),
             )
 
-            return energy_batch.mean()
+            def param_to_wavefunction(param_tree):
+                wavefunction = state.apply_fn(
+                    {"params": param_tree},
+                    batch,
+                )
 
-        energy, grads = jax.value_and_grad(get_energy)(state.params)
-        state = state.apply_gradients(grads=grads)
+                return wavefunction.squeeze(-1)
 
-        return state, energy, grads
+            def grad_func(x, i):
+                return jax.grad(lambda f: param_to_wavefunction(f)[i])(x)
+
+            # Use jax.vmap to vectorize over the index i
+            vector_grad = jax.vmap(grad_func, in_axes=(None, 0))
+
+            grad_log = vector_grad(params, jnp.arange(self.config.hyperparam.batch_size))
+            #print(grad_log)
+
+            mean_energy = energy_batch.mean()
+
+            def one_grad(energy, one_tree):
+                return tree_map(lambda g: g * (energy.squeeze(-1) - mean_energy), one_tree)
+
+            batch_grad = jax.vmap(one_grad)(energy_batch, grad_log)
+
+            grad_mean = tree_map(lambda g: 2. * jnp.mean(g, axis=0), batch_grad)
+
+            return energy_batch.mean(), grad_mean
+
+        energy, grad = get_energy_and_grad(state.params)
+
+        state = state.apply_gradients(grads=grad)
+
+        return state, energy, grad
 
     def train(self):
 
         logging.info("initializing model.")
-        init_elec = jnp.zeros(
+        init_elec = jnp.ones(
             (
                 self.config.hyperparam.batch_size,
                 self.system.total_electrons,
