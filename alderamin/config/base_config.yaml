@@ -1,9 +1,9 @@
 hyperparam:
-  learning_rate: 5e-3  # adam: 1e-5
+  learning_rate: 3e-4  # adam: 1e-5
   batch_size: 4096
   step: 10000
   training_seed: 114514
-  gradient_clipping: 5e-2  # adam: 1e-3
+  gradient_clipping: 1e-3  # adam: 1e-3
   log_epsilon: 1e-12
 
   mad_clipping_factor: 5
@@ -13,8 +13,10 @@ sampler:
   burn_in_steps: 100
   sample_steps: 10
   sampling_seed: 114514
-  target_acceptance: 0.5
-  init_width: 0.01
+  acceptance_range:
+    - 0.5
+    - 0.55
+  init_width: 1
   sample_width: 0.02
   sample_width_adapt_freq: 100
   computation_dtype: "float32"
@@ -25,6 +27,7 @@ psiformer:
   num_heads: 4
   qkv_size: 64
   use_memory_efficient_attention: false
+  use_norm: false
   group: null
 
   computation_dtype: "float32"

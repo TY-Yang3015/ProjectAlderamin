@@ -34,12 +34,12 @@ class Envelop(nn.Module):
     def setup(self) -> None:
         self.pi_kiI = self.param(
             "pi_kiI",
-            nn.initializers.normal(0.1),
+            nn.initializers.ones,
             (self.num_of_determinants, self.num_of_electrons, 1, self.num_of_nucleus),
         )
         self.sigma_kiI = self.param(
             "omega_kiI",
-            custom_initializer,
+            nn.initializers.ones,
             (self.num_of_determinants, self.num_of_electrons, 1, self.num_of_nucleus),
         )
 

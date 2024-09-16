@@ -31,11 +31,12 @@ class MultiHeadCrossAttention(nn.Module):
     output_channels: int
     num_heads: int = 4
     use_memory_efficient_attention: bool = False
+    use_norm: bool = False
     group: int | None = None
     use_qkv_bias: bool = False
     use_dropout: bool = False
     dropout_rate: float = 0.1
-    kernel_init: nn.initializers.Initializer = jax.nn.initializers.normal(stddev=0.01)
+    kernel_init: nn.initializers.Initializer = jax.nn.initializers.normal(stddev=1)
 
     param_dtype: jnp.dtype = jnp.float32
     computation_dtype: jnp.dtype = jnp.float32
@@ -45,20 +46,23 @@ class MultiHeadCrossAttention(nn.Module):
         self, x: jnp.ndarray, train: bool, context: jnp.ndarray | None = None
     ) -> jnp.ndarray:
 
-        if self.group is not None:
-            x = nn.GroupNorm(
-                num_groups=self.group if x.shape[-1] % self.group == 0 else x.shape[-1],
-                group_size=None,
-                param_dtype=self.param_dtype,
-            )(x)
-        else:
-            x = nn.LayerNorm(
-                dtype=self.computation_dtype,
-                param_dtype=self.param_dtype,
-                use_scale=False,
-                use_bias=False,
-                epsilon=1e-24,
-            )(x)
+        if self.use_norm is not False:
+            if self.group is not None:
+                x = nn.GroupNorm(
+                    num_groups=self.group if x.shape[-1] % self.group == 0 else x.shape[-1],
+                    group_size=None,
+                    param_dtype=self.param_dtype,
+                )(x)
+            else:
+                x = nn.LayerNorm(
+                    dtype=self.computation_dtype,
+                    param_dtype=self.param_dtype,
+                    use_scale=True,
+                    use_bias=True,
+                    scale_init=nn.initializers.ones,
+                    bias_init=nn.initializers.zeros,
+                    epsilon=1e-5,
+                )(x)
         shape = x.shape
 
         if self.use_memory_efficient_attention:

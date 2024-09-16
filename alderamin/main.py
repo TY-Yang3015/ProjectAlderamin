@@ -2,8 +2,6 @@ import hydra
 
 from alderamin.data import GlobalSystem, AtomicNucleus, ElectronNucleusSystem
 from alderamin.trainer import PsiFormerTrainer
-from absl import app
-import logging
 
 from omegaconf import DictConfig
 
@@ -11,8 +9,7 @@ a = AtomicNucleus("H", (0, 0, 0))
 b = ElectronNucleusSystem(system_nucleus=a, num_electrons=1).initialize_system()
 c = AtomicNucleus("H", (1.398, 0, 0))
 d = ElectronNucleusSystem(system_nucleus=c, num_electrons=1).initialize_system()
-
-e = GlobalSystem(system_member=[b, d]).initialize_system()
+e = GlobalSystem(system_member=[b]).initialize_system()
 
 
 @hydra.main(version_base=None, config_path="./config", config_name="base_config")
@@ -20,7 +17,6 @@ def execute(config: DictConfig) -> None:
     import jax
 
     jax.config.update("jax_debug_nans", True)
-    # jax.config.update("jax_enable_x64", True)
     trainer = PsiFormerTrainer(config, e)
 
     pos = trainer.sampler.walker_state.positions

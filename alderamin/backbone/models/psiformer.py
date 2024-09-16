@@ -37,6 +37,7 @@ class PsiFormer(nn.Module):
     num_heads: int
     qkv_size: int
     use_memory_efficient_attention: bool = False
+    use_norm: bool = False
     group: None | int = None
 
     computation_dtype: jnp.dtype | str = "float32"
@@ -126,22 +127,23 @@ class PsiFormer(nn.Module):
             use_bias=False,
             dtype=self.computation_dtype,
             param_dtype=self.param_dtype,
-            kernel_init=nn.initializers.normal(0.01),
+            kernel_init=nn.initializers.normal(1),
         )(x)
 
         for _ in range(self.num_of_blocks):
             x = PsiFormerBlock(
                 num_heads=self.num_heads,
                 use_memory_efficient_attention=self.use_memory_efficient_attention,
+                use_norm=self.use_norm,
                 group=self.group,
                 param_dtype=self.param_dtype,
                 computation_dtype=self.computation_dtype,
-                kernel_init=nn.initializers.normal(0.01),
+                kernel_init=nn.initializers.normal(1),
             )(x)
 
         psiformer_pre_det = nn.Dense(
             features=self.num_of_electrons * self.num_of_determinants,
-            kernel_init=nn.initializers.normal(0.01),
+            kernel_init=nn.initializers.normal(1),
             use_bias=False,
             dtype=self.computation_dtype,
             param_dtype=self.param_dtype,

@@ -38,7 +38,7 @@ class MetropolisHastingSampler:
         system: GlobalSystem,
         batch_size: int,
         sampling_seed: int,
-        target_acceptance: float,
+        acceptance_range: list[float, float],
         init_width: float,
         sample_width: float,
         sample_width_adapt_freq: int,
@@ -58,7 +58,7 @@ class MetropolisHastingSampler:
         self.batch_size: int = batch_size
         self.num_of_walkers: int = self.batch_size
         self.sampling_key: random.PRNGKey = random.PRNGKey(sampling_seed)
-        self.target_acceptance: float = target_acceptance
+        self.acceptance_range: jnp.ndarray = jnp.array(acceptance_range)  # [min, max]
 
         self.init_width: float = init_width
         self.sample_width: float = sample_width
@@ -186,9 +186,15 @@ class MetropolisHastingSampler:
         self, memory: jnp.ndarray, walker_state: WalkerState
     ) -> tuple[jnp.ndarray, WalkerState]:
         accept_rate = jnp.sum(memory) / len(memory)
-        new_size = walker_state.step_size * jnp.exp(
-            (accept_rate - self.target_acceptance) / jnp.sqrt(len(memory))
+        new_size = walker_state.step_size * jnp.where(
+            accept_rate < jnp.min(self.acceptance_range),
+            1.1, 1.
         )
+        new_size *= jnp.where(
+            accept_rate > jnp.max(self.acceptance_range),
+            1., 1.1
+        )
+
         walker_state = walker_state.replace(step_size=new_size)
         memory = jnp.array([])
         return memory, walker_state

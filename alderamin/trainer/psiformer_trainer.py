@@ -37,7 +37,7 @@ class PsiFormerTrainer:
             system=system,
             batch_size=self.config.hyperparam.batch_size,
             sampling_seed=self.config.sampler.sampling_seed,
-            target_acceptance=self.config.sampler.target_acceptance,
+            acceptance_range=self.config.sampler.acceptance_range,
             init_width=self.config.sampler.init_width,
             sample_width=self.config.sampler.sample_width,
             sample_width_adapt_freq=self.config.sampler.sample_width_adapt_freq,
@@ -72,6 +72,7 @@ class PsiFormerTrainer:
             num_heads=self.config.psiformer.num_heads,
             qkv_size=self.config.psiformer.qkv_size,
             use_memory_efficient_attention=self.config.psiformer.use_memory_efficient_attention,
+            use_norm=self.config.psiformer.use_norm,
             group=self.config.psiformer.group,
             computation_dtype=self.config.psiformer.computation_dtype,
             param_dtype=self.config.psiformer.param_dtype,
@@ -88,18 +89,17 @@ class PsiFormerTrainer:
             decay_rate=0.95,
             end_value=self.config.hyperparam.learning_rate / 2.0,
         )
-        # self.optimiser = optax.adam(lr)
-        self.optimiser = shampoo(
-            self.config.hyperparam.learning_rate,
-            block_size=128,
-            diagonal_epsilon=1e-12,
-            matrix_epsilon=1e-12,
-        )
+        self.optimiser = optax.adam(lr)
+        #self.optimiser = shampoo(
+        #    lr,
+        #    block_size=128,
+        #    diagonal_epsilon=1e-12,
+        #    matrix_epsilon=1e-12,
+        #)
         self.optimiser = optax.chain(
             optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
             self.optimiser,
             # optax.add_decayed_weights(weight_decay=1e-4),
-            optax.ema(0.99),
         )
 
     def _init_savedir(self) -> str:
