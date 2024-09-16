@@ -1,10 +1,16 @@
-hyperparam:
-  optimiser: "shampoo"
-  learning_rate: 3e-4  # adam: 1e-5
+optimiser:
+  type: "adam"
+  adam:
+    init_learning_rate: 3e-4
+    b1: 0.9
+    b2: 0.999
+
+lr:
   delay: 10000.
   decay: 1.
 
-  batch_size: 128
+hyperparam:
+  batch_size: 512
   step: 10000
   training_seed: 114514
   gradient_clipping: 0.01

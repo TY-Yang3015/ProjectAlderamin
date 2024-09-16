@@ -24,7 +24,7 @@ class PsiFormerTrainer:
     def __init__(self, config: DictConfig, system: GlobalSystem):
         self.config = config
 
-        logger = logging.getLogger("main")
+        logger = logging.getLogger("env")
         logger.setLevel(logging.INFO)
         # log environment information
         logger.info(f"JAX backend: {xla_bridge.get_backend().platform}")
@@ -83,26 +83,27 @@ class PsiFormerTrainer:
 
         # initialise optimiser
         def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
-            return self.config.hyperparam.learning_rate * jnp.power(
-                (1.0 / (1.0 + (t_ / self.config.hyperparam.delay))), self.config.hyperparam.decay)
-
-        if self.config.hyperparam.optimiser.casefold() == 'adam':
-            self.optimiser = optax.adam(learning_rate=learning_rate_schedule)
-        elif self.config.hyperparam.optimiser.casefold() == 'shampoo':
+            return self.config.optimiser.adam.init_learning_rate * jnp.power(
+                (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay)
+        if self.config.optimiser.type.casefold() == 'adam':
+            self.optimiser = optax.adam(learning_rate=learning_rate_schedule,
+                                        b1=self.config.optimiser.adam.b1,
+                                        b2=self.config.optimiser.adam.b2
+                                        )
+        elif self.config.optimiser.type.casefold() == 'shampoo':
             self.optimiser = shampoo(
-                self.config.hyperparam.learning_rate,
+                learning_rate=learning_rate_schedule,
+                beta1=0.,
                 block_size=128,
                 diagonal_epsilon=1e-12,
                 matrix_epsilon=1e-12,
             )
         else:
-            raise NotImplementedError(f"optimiser {self.config.hyperparam.optimiser} not available.")
+            raise NotImplementedError(f"optimiser {self.config.optimiser.type} not available.")
 
         self.optimiser = optax.chain(
             optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
             self.optimiser,
-            #optax.scale_by_schedule(learning_rate_schedule),
-            #optax.scale(-1.)
         )
 
     def _init_savedir(self) -> str:
@@ -161,6 +162,7 @@ class PsiFormerTrainer:
                     raw_batch,
                 )
 
+                # needed for folx.forward_laplacian
                 if wavefunction.shape == (1, 1):
                     wavefunction = wavefunction[0][0]
 
@@ -173,18 +175,10 @@ class PsiFormerTrainer:
             laplacian, jacobian = result.laplacian, result.jacobian.dense_array
             kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.
 
-            #jacobian_op = jax.grad(get_wavefunction)
-            #jacobian = jax.vmap(jacobian_op)(batch)
-            #laplacian_op = jax.grad(lambda x: jacobian_op(x).sum())
-            #laplacian = jax.vmap(laplacian_op)(batch)
-            #kinetic_term = -(laplacian.sum(axis=(-1, -2))
-            #                 ) / 2.
-
             kinetic_term = kinetic_term.reshape(-1, 1)
-
             energy_batch = kinetic_term + electric_term
-            #energy_batch = jnp.clip(energy_batch, None, 0.)
 
+            # mad clipping
             mean_absolute_deviation = jnp.mean(
                 jnp.abs(energy_batch - jnp.median(energy_batch))
             )
@@ -206,11 +200,9 @@ class PsiFormerTrainer:
             def grad_func(x, i):
                 return jax.grad(lambda f: param_to_wavefunction(f)[i])(x)
 
-            # Use jax.vmap to vectorize over the index i
             vector_grad = jax.vmap(grad_func, in_axes=(None, 0))
 
             grad_log = vector_grad(params, jnp.arange(self.config.hyperparam.batch_size))
-            #print(grad_log)
 
             mean_energy = energy_batch.mean()
 
