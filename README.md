@@ -1,4 +1,4 @@
-## Project PsiFlax
+# Project PsiFlax
 
 This is a re-implementation project of some neural-network-ansatz-based variational 
 Monte-Carlo models using the Google 
