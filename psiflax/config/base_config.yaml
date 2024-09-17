@@ -1,16 +1,38 @@
 optimiser:
-  type: "adam"
+  type: "shampoo"
   adam:
     init_learning_rate: 3e-4
     b1: 0.9
     b2: 0.999
+  shampoo:
+    learning_rate: 3e-4
+    block_size: 128
+    beta1: 0.9
+    beta2: 0.999
+    diagonal_epsilon: 1e-24
+    matrix_epsilon: 1e-24
+    weight_decay: 0.0
+    start_preconditioning_step: 1000
+    preconditioning_compute_steps: 1
+    statistics_compute_steps: 1
+    best_effort_shape_interpretation: true
+    nesterov: false
+    exponent_override: 0
+    shard_optimizer_states: false
+    best_effort_memory_usage_reduction: false
+    inverse_failure_threshold: 0.1
+    moving_average_for_momentum: false
+    skip_preconditioning_dim_size_gt: 4096
+    clip_by_scaled_gradient_norm: null
+    decoupled_learning_rate: true
+    decoupled_weight_decay: false
 
 lr:
   delay: 10000.
   decay: 1.
 
 hyperparam:
-  batch_size: 4096
+  batch_size: 512
   step: 10000
   training_seed: 114514
   gradient_clipping: 0.01

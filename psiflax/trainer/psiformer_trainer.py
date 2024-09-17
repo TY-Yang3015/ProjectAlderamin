@@ -96,10 +96,26 @@ class PsiFormerTrainer:
         elif self.config.optimiser.type.casefold() == "shampoo":
             self.optimiser = shampoo(
                 learning_rate=learning_rate_schedule,
-                beta1=0.0,
-                block_size=128,
-                diagonal_epsilon=1e-12,
-                matrix_epsilon=1e-12,
+                beta1=self.config.optimiser.shampoo.beta1,
+                beta2=self.config.optimiser.shampoo.beta2,
+                block_size=self.config.optimiser.shampoo.block_size,
+                diagonal_epsilon=self.config.optimiser.shampoo.diagonal_epsilon,
+                matrix_epsilon=self.config.optimiser.shampoo.matrix_epsilon,
+                weight_decay=self.config.optimiser.shampoo.weight_decay,
+                start_preconditioning_step=self.config.optimiser.shampoo.start_preconditioning_step,
+                preconditioning_compute_steps=self.config.optimiser.shampoo.preconditioning_compute_steps,
+                statistics_compute_steps=self.config.optimiser.shampoo.statistics_compute_steps,
+                best_effort_shape_interpretation=self.config.optimiser.shampoo.best_effort_shape_interpretation,
+                nesterov=self.config.optimiser.shampoo.nesterov,
+                exponent_override=self.config.optimiser.shampoo.exponent_override,
+                shard_optimizer_states=self.config.optimiser.shampoo.shard_optimizer_states,
+                best_effort_memory_usage_reduction=self.config.optimiser.shampoo.best_effort_memory_usage_reduction,
+                inverse_failure_threshold=self.config.optimiser.shampoo.inverse_failure_threshold,
+                moving_average_for_momentum=self.config.optimiser.shampoo.moving_average_for_momentum,
+                skip_preconditioning_dim_size_gt=self.config.optimiser.shampoo.skip_preconditioning_dim_size_gt,
+                clip_by_scaled_gradient_norm=self.config.optimiser.shampoo.clip_by_scaled_gradient_norm,
+                decoupled_learning_rate=self.config.optimiser.shampoo.decoupled_learning_rate,
+                decoupled_weight_decay=self.config.optimiser.shampoo.decoupled_weight_decay,
             )
         else:
             raise NotImplementedError(
@@ -183,6 +199,8 @@ class PsiFormerTrainer:
             kinetic_term = kinetic_term.reshape(-1, 1)
             energy_batch = kinetic_term + electric_term
 
+            output_energy = energy_batch.mean()
+
             # mad clipping
             mean_absolute_deviation = jnp.mean(
                 jnp.abs(energy_batch - jnp.median(energy_batch))
@@ -202,27 +220,41 @@ class PsiFormerTrainer:
 
                 return wavefunction.squeeze(-1)
 
-            def grad_func(x, i):
-                return jax.grad(lambda f: param_to_wavefunction(f)[i])(x)
+            # def grad_func(x, i):
+            #    return jax.grad(lambda f: param_to_wavefunction(f)[i])(x)
 
-            vector_grad = jax.vmap(grad_func, in_axes=(None, 0))
+            # vector_grad = jax.vmap(grad_func, in_axes=(None, 0))
 
-            grad_log = vector_grad(
-                params, jnp.arange(self.config.hyperparam.batch_size)
-            )
+            # grad_log = vector_grad(
+            #    params, jnp.arange(self.config.hyperparam.batch_size)
+            # )
 
             mean_energy = energy_batch.mean()
+            energy_batch -= mean_energy
+            energy_batch = energy_batch.squeeze(-1)
 
-            def one_grad(energy, one_tree):
-                return tree_map(
-                    lambda g: g * (energy.squeeze(-1) - mean_energy), one_tree
-                )
+            jacobian_tree = jax.jacrev(param_to_wavefunction)(state.params)
+            mean_grad = tree_map(
+                lambda g: jnp.mean(
+                    g
+                    * jnp.broadcast_to(
+                        energy_batch.reshape(-1, *([1] * (g.ndim - 1))), g.shape
+                    ),
+                    axis=0,
+                ),
+                jacobian_tree,
+            )
 
-            batch_grad = jax.vmap(one_grad)(energy_batch, grad_log)
+            # def one_grad(energy, one_tree):
+            #    return tree_map(
+            #        lambda g: g * (energy.squeeze(-1) - mean_energy), one_tree
+            #    )
 
-            grad_mean = tree_map(lambda g: 2.0 * jnp.mean(g, axis=0), batch_grad)
+            # batch_grad = jax.vmap(one_grad)(energy_batch, grad_log)
 
-            return energy_batch.mean(), grad_mean
+            # grad_mean = tree_map(lambda g: 2.0 * jnp.mean(g, axis=0), batch_grad)
+
+            return output_energy, mean_grad
 
         energy, grad = get_energy_and_grad(state.params)
 
