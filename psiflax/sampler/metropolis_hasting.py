@@ -185,13 +185,9 @@ class MetropolisHastingSampler:
         accept_rate = jnp.sum(memory, axis=-1) / memory.shape[-1]
         accept_rate = accept_rate.reshape(accept_rate.shape[0], 1, 1)
         new_size = walker_state.step_size / jnp.where(
-            accept_rate < jnp.min(self.acceptance_range),
-            1.1, 1.
+            accept_rate < jnp.min(self.acceptance_range), 1.1, 1.0
         )
-        new_size *= jnp.where(
-            accept_rate > jnp.max(self.acceptance_range),
-            1., 1.1
-        )
+        new_size *= jnp.where(accept_rate > jnp.max(self.acceptance_range), 1.0, 1.1)
 
         walker_state = walker_state.replace(step_size=new_size)
         memory = jnp.array([])

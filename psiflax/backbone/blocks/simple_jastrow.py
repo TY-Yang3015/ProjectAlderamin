@@ -9,9 +9,7 @@ class SimpleJastrow(nn.Module):
     """
 
     def setup(self):
-        self.alpha_parallel = self.param(
-            "alpha_parallel", nn.initializers.ones, (1,)
-        )
+        self.alpha_parallel = self.param("alpha_parallel", nn.initializers.ones, (1,))
         self.alpha_anti = self.param("alpha_anti", nn.initializers.ones, (1,))
 
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:

@@ -49,7 +49,9 @@ class MultiHeadCrossAttention(nn.Module):
         if self.use_norm is not False:
             if self.group is not None:
                 x = nn.GroupNorm(
-                    num_groups=self.group if x.shape[-1] % self.group == 0 else x.shape[-1],
+                    num_groups=self.group
+                    if x.shape[-1] % self.group == 0
+                    else x.shape[-1],
                     group_size=None,
                     param_dtype=self.param_dtype,
                 )(x)

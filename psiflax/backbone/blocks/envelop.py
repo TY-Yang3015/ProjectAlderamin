@@ -7,7 +7,7 @@ import jax
 
 
 def custom_initializer(key, shape, dtype=jnp.float32):
-    return jax.random.normal(key, shape, dtype) * 0.1 + 10.
+    return jax.random.normal(key, shape, dtype) * 0.1 + 10.0
 
 
 class Envelop(nn.Module):

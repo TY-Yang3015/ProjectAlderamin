@@ -84,22 +84,27 @@ class PsiFormerTrainer:
         # initialise optimiser
         def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
             return self.config.optimiser.adam.init_learning_rate * jnp.power(
-                (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay)
-        if self.config.optimiser.type.casefold() == 'adam':
-            self.optimiser = optax.adam(learning_rate=learning_rate_schedule,
-                                        b1=self.config.optimiser.adam.b1,
-                                        b2=self.config.optimiser.adam.b2
-                                        )
-        elif self.config.optimiser.type.casefold() == 'shampoo':
+                (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay
+            )
+
+        if self.config.optimiser.type.casefold() == "adam":
+            self.optimiser = optax.adam(
+                learning_rate=learning_rate_schedule,
+                b1=self.config.optimiser.adam.b1,
+                b2=self.config.optimiser.adam.b2,
+            )
+        elif self.config.optimiser.type.casefold() == "shampoo":
             self.optimiser = shampoo(
                 learning_rate=learning_rate_schedule,
-                beta1=0.,
+                beta1=0.0,
                 block_size=128,
                 diagonal_epsilon=1e-12,
                 matrix_epsilon=1e-12,
             )
         else:
-            raise NotImplementedError(f"optimiser {self.config.optimiser.type} not available.")
+            raise NotImplementedError(
+                f"optimiser {self.config.optimiser.type} not available."
+            )
 
         self.optimiser = optax.chain(
             optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
@@ -134,13 +139,13 @@ class PsiFormerTrainer:
                 for i in range(self.num_of_electrons):
                     elec_nuc_term = elec_nuc_term.at[:, 0].add(
                         (
-                                self.nuc_charges[I]
-                                / (
-                                    jnp.linalg.norm(
-                                        coordinates[:, i, :] - self.nuc_positions[I, :],
-                                        axis=-1,
-                                    )
+                            self.nuc_charges[I]
+                            / (
+                                jnp.linalg.norm(
+                                    coordinates[:, i, :] - self.nuc_positions[I, :],
+                                    axis=-1,
                                 )
+                            )
                         )
                     )
 
@@ -173,7 +178,7 @@ class PsiFormerTrainer:
             laplacian_op = folx.forward_laplacian(get_wavefunction)
             result = jax.vmap(laplacian_op)(batch)
             laplacian, jacobian = result.laplacian, result.jacobian.dense_array
-            kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.
+            kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.0
 
             kinetic_term = kinetic_term.reshape(-1, 1)
             energy_batch = kinetic_term + electric_term
@@ -202,16 +207,20 @@ class PsiFormerTrainer:
 
             vector_grad = jax.vmap(grad_func, in_axes=(None, 0))
 
-            grad_log = vector_grad(params, jnp.arange(self.config.hyperparam.batch_size))
+            grad_log = vector_grad(
+                params, jnp.arange(self.config.hyperparam.batch_size)
+            )
 
             mean_energy = energy_batch.mean()
 
             def one_grad(energy, one_tree):
-                return tree_map(lambda g: g * (energy.squeeze(-1) - mean_energy), one_tree)
+                return tree_map(
+                    lambda g: g * (energy.squeeze(-1) - mean_energy), one_tree
+                )
 
             batch_grad = jax.vmap(one_grad)(energy_batch, grad_log)
 
-            grad_mean = tree_map(lambda g: 2. * jnp.mean(g, axis=0), batch_grad)
+            grad_mean = tree_map(lambda g: 2.0 * jnp.mean(g, axis=0), batch_grad)
 
             return energy_batch.mean(), grad_mean
 
