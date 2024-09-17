@@ -1,7 +1,7 @@
 import hydra
 
-from alderamin.data import GlobalSystem, AtomicNucleus, ElectronNucleusSystem
-from alderamin.trainer import PsiFormerTrainer
+from psiflax.data import GlobalSystem, AtomicNucleus, ElectronNucleusSystem
+from psiflax.trainer import PsiFormerTrainer
 
 from omegaconf import DictConfig
 

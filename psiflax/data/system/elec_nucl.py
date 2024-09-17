@@ -1,7 +1,7 @@
 import attr
 
-from alderamin.data.particle_class import AtomicNucleus, Electron
-from alderamin.data.system import QuantumSystem
+from psiflax.data.particle_class import AtomicNucleus, Electron
+from psiflax.data.system import QuantumSystem
 
 
 @attr.s

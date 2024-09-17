@@ -12,12 +12,12 @@ import hydra
 import os
 import orbax.checkpoint as ocp
 
-import alderamin.folx as folx
-from alderamin.shampoo.distributed_shampoo import distributed_shampoo as shampoo
-from alderamin.backbone.models import PsiFormer
-from alderamin.data import GlobalSystem
-from alderamin.sampler import MetropolisHastingSampler
-from alderamin.util import log_histograms
+import psiflax.folx as folx
+from psiflax.shampoo.distributed_shampoo import distributed_shampoo as shampoo
+from psiflax.backbone.models import PsiFormer
+from psiflax.data import GlobalSystem
+from psiflax.sampler import MetropolisHastingSampler
+from psiflax.util import log_histograms
 
 
 class PsiFormerTrainer:

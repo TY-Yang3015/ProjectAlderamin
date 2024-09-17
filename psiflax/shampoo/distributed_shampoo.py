@@ -53,7 +53,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from alderamin.shampoo.quantization_utils import QuantizedValue
+from psiflax.shampoo.quantization_utils import QuantizedValue
 
 # Dtype for inverse-pth root routine
 # Switch to f64 if you have hardware that supports it. Enable the jax flag

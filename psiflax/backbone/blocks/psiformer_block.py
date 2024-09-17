@@ -1,7 +1,7 @@
 import flax.linen as nn
 import jax.numpy as jnp
 
-from alderamin.backbone.blocks import MultiHeadCrossAttention
+from psiflax.backbone.blocks import MultiHeadCrossAttention
 
 
 class PsiFormerBlock(nn.Module):

@@ -7,7 +7,7 @@ from einops import repeat, rearrange
 from functools import partial
 from tqdm import tqdm
 
-from alderamin.data import GlobalSystem
+from psiflax.data import GlobalSystem
 
 
 @struct.dataclass
@@ -259,7 +259,7 @@ class MetropolisHastingSampler:
 
 """
 from einops import rearrange
-from alderamin.data import AtomicNucleus, ElectronNucleusSystem
+from psiflax.data import AtomicNucleus, ElectronNucleusSystem
 
 a = AtomicNucleus('H', (0, 0, 0))
 c = ElectronNucleusSystem(system_nucleus=a,

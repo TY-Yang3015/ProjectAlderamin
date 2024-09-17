@@ -1,1 +1,0 @@
-from alderamin.sampler.metropolis_hasting import MetropolisHastingSampler

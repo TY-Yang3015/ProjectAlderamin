@@ -2,7 +2,7 @@ import flax.linen as nn
 import jax.numpy as jnp
 from einops import rearrange, repeat
 
-from alderamin.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop
+from psiflax.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop
 
 
 class PsiFormer(nn.Module):

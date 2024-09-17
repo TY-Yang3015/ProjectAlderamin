@@ -1,7 +1,7 @@
 import flax.linen as nn
 import jax.numpy as jnp
 import jax
-from alderamin.backbone.blocks.memory_efficient_attention import (
+from psiflax.backbone.blocks.memory_efficient_attention import (
     MemoryEfficientAttention,
 )
 from einops import rearrange
