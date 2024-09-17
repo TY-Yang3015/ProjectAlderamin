@@ -16,7 +16,7 @@ e = GlobalSystem(system_member=[b, d]).initialize_system()
 def execute(config: DictConfig) -> None:
     import jax
 
-    jax.config.update("jax_debug_nans", True)
+    #jax.config.update("jax_debug_nans", True)
     trainer = PsiFormerTrainer(config, e)
 
     pos = trainer.sampler.walker_state.positions
