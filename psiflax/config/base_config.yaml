@@ -34,14 +34,14 @@ hyperparam:
   batch_size: 4096
   step: 10000
   training_seed: 114514
-  gradient_clipping: 0.01
-  log_epsilon: 1e-12
+  gradient_clipping: 1
+  log_epsilon: 1e-24
 
   mad_clipping_factor: 5
   scale_input: false
 
 sampler:
-  burn_in_steps: 0
+  burn_in_steps: 100
   sample_steps: 10
   sampling_seed: 114514
   acceptance_range:
@@ -68,3 +68,7 @@ ckpt:
   save_ckpt: false
   ckpt_freq: 1000
   save_num_ckpt: 5
+
+log:
+  log_grad_and_params: false
+  log_pmove: false

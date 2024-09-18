@@ -200,6 +200,7 @@ class PsiFormerTrainer:
             energy_batch = kinetic_term + electric_term
 
             output_energy = energy_batch.mean()
+            output_var = energy_batch.var()
 
             # mad clipping
             mean_absolute_deviation = jnp.mean(
@@ -227,13 +228,12 @@ class PsiFormerTrainer:
             total_grad = jax.vjp(param_to_wavefunction, state.params)[1](energy_batch)[0]
             mean_grad = tree_map(lambda g: g / energy_batch.shape[0], total_grad)
 
-            return output_energy, mean_grad
+            return (output_energy, output_var), mean_grad
 
-        energy, grad = get_energy_and_grad(state.params)
-
+        e_and_v, grad = get_energy_and_grad(state.params)
         state = state.apply_gradients(grads=grad)
 
-        return state, energy, grad
+        return state, e_and_v, grad
 
     def train(self):
 
@@ -284,10 +284,10 @@ class PsiFormerTrainer:
         logger = logging.getLogger("loop")
 
         for step in range(self.config.hyperparam.step):
-            batch = self.sampler.sample_psiformer(
+            batch, pmean = self.sampler.sample_psiformer(
                 state, self.config.sampler.sample_steps
             )
-            state, energy, grad = self._train_step(batch, state)
+            state, energy_and_var, grad = self._train_step(batch, state)
 
             if self.config.ckpt.save_ckpt:
                 config_dict = OmegaConf.to_container(self.config, resolve=True)
@@ -299,10 +299,16 @@ class PsiFormerTrainer:
                     ),
                 )
 
-            log_histograms(writer, state.params, grad, step)
-            writer.write_scalars(step, {"energy": energy})
+            if self.config.log.log_grad_and_params:
+                log_histograms(writer, state.params, grad, step)
 
-            logger.info(f"step: {step} " f"energy: {energy}" f"")
+            writer.write_scalars(step, {"energy": energy_and_var[0], 'var': energy_and_var[1],
+                                        "pmean": pmean})
+
+            logger.info(f"step: {step} " 
+                        f"energy: {energy_and_var[0]:.4f} "
+                        f"var: {energy_and_var[1]:.4f} "
+                        f"pmean: {pmean:.4f}")
 
         writer.flush()
 

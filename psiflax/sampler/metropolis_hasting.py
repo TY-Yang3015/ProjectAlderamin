@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import jax
 import jax.numpy as jnp
 import jax.random as random
@@ -5,6 +7,8 @@ from flax.training.train_state import TrainState
 from flax import struct
 from einops import repeat, rearrange
 from functools import partial
+
+from jax import Array
 from tqdm import tqdm
 
 from psiflax.data import GlobalSystem
@@ -207,7 +211,7 @@ class MetropolisHastingSampler:
     @partial(jax.jit, static_argnums=0)
     def _psiformer_sample_step(
         self, walker_state: WalkerState, psiformer_train_state: TrainState
-    ) -> tuple[WalkerState, jnp.ndarray]:
+    ) -> tuple[WalkerState, jnp.ndarray, jnp.ndarray]:
         walker_state, proposed_positions = walker_state.propose()
 
         current_log_prob = 2 * (
@@ -227,7 +231,6 @@ class MetropolisHastingSampler:
         log_ratio = proposed_log_prob - current_log_prob
 
         accept_probs = jnp.exp(log_ratio)  # (batch, 1)
-        # print(accept_probs.mean())
 
         accept_probs = jnp.minimum(accept_probs, jnp.ones_like(accept_probs)).squeeze(
             -1
@@ -236,21 +239,24 @@ class MetropolisHastingSampler:
         walker_state, decisions = self._mh_accept_step(
             walker_state, accept_probs, proposed_positions
         )
-        return walker_state, decisions
+        return walker_state, decisions, accept_probs.mean()
 
+    @partial(jax.jit, static_argnums=(0, 2))
     def sample_psiformer(
         self, psiformer_train_state: TrainState, sample_step: int
-    ) -> jnp.ndarray:
+    ) -> tuple[jnp.ndarray, float]:
+        pmean_final = 0.
         for _ in range(sample_step):
-            self.walker_state, decisions = self._psiformer_sample_step(
+            self.walker_state, decisions, pmean = self._psiformer_sample_step(
                 self.walker_state, psiformer_train_state
             )
+            pmean_final += pmean
             self.global_memory = jnp.append(self.global_memory, decisions)
             if len(self.global_memory) % self.sample_width_adapt_freq == 0:
                 self.global_memory, self.walker_state = self._adapt_step_size(
                     self.global_memory, self.walker_state
                 )
-        return self.walker_state.positions
+        return self.walker_state.positions, pmean_final/sample_step
 
 
 """
