@@ -95,7 +95,7 @@ class PsiFormerTrainer:
             )
         elif self.config.optimiser.type.casefold() == "shampoo":
             self.optimiser = shampoo(
-                learning_rate=learning_rate_schedule,
+                learning_rate=self.config.optimiser.shampoo.learning_rate,
                 beta1=self.config.optimiser.shampoo.beta1,
                 beta2=self.config.optimiser.shampoo.beta2,
                 block_size=self.config.optimiser.shampoo.block_size,
@@ -113,7 +113,6 @@ class PsiFormerTrainer:
                 inverse_failure_threshold=self.config.optimiser.shampoo.inverse_failure_threshold,
                 moving_average_for_momentum=self.config.optimiser.shampoo.moving_average_for_momentum,
                 skip_preconditioning_dim_size_gt=self.config.optimiser.shampoo.skip_preconditioning_dim_size_gt,
-                clip_by_scaled_gradient_norm=self.config.optimiser.shampoo.clip_by_scaled_gradient_norm,
                 decoupled_learning_rate=self.config.optimiser.shampoo.decoupled_learning_rate,
                 decoupled_weight_decay=self.config.optimiser.shampoo.decoupled_weight_decay,
             )
@@ -133,9 +132,10 @@ class PsiFormerTrainer:
         os.makedirs(save_dir)
         return save_dir
 
-    @partial(jax.jit, static_argnums=0)
+    @partial(jax.jit, static_argnums=0, donate_argnums=2)
     def _train_step(self, batch, state):
         def get_electric_hamiltonian(coordinates: jnp.ndarray) -> jnp.ndarray:
+
             elec_elec_term = jnp.zeros((self.config.hyperparam.batch_size, 1))
             elec_nuc_term = jnp.zeros((self.config.hyperparam.batch_size, 1))
             nuc_nuc_term = jnp.zeros((self.config.hyperparam.batch_size, 1))
@@ -155,13 +155,13 @@ class PsiFormerTrainer:
                 for i in range(self.num_of_electrons):
                     elec_nuc_term = elec_nuc_term.at[:, 0].add(
                         (
-                            self.nuc_charges[I]
-                            / (
-                                jnp.linalg.norm(
-                                    coordinates[:, i, :] - self.nuc_positions[I, :],
-                                    axis=-1,
+                                self.nuc_charges[I]
+                                / (
+                                    jnp.linalg.norm(
+                                        coordinates[:, i, :] - self.nuc_positions[I, :],
+                                        axis=-1,
+                                    )
                                 )
-                            )
                         )
                     )
 
@@ -191,7 +191,7 @@ class PsiFormerTrainer:
 
             electric_term = get_electric_hamiltonian(batch)
 
-            laplacian_op = folx.forward_laplacian(get_wavefunction)
+            laplacian_op = folx.forward_laplacian(get_wavefunction, 6)
             result = jax.vmap(laplacian_op)(batch)
             laplacian, jacobian = result.laplacian, result.jacobian.dense_array
             kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.0
@@ -220,39 +220,12 @@ class PsiFormerTrainer:
 
                 return wavefunction.squeeze(-1)
 
-            # def grad_func(x, i):
-            #    return jax.grad(lambda f: param_to_wavefunction(f)[i])(x)
-
-            # vector_grad = jax.vmap(grad_func, in_axes=(None, 0))
-
-            # grad_log = vector_grad(
-            #    params, jnp.arange(self.config.hyperparam.batch_size)
-            # )
-
             mean_energy = energy_batch.mean()
             energy_batch -= mean_energy
             energy_batch = energy_batch.squeeze(-1)
 
-            jacobian_tree = jax.jacrev(param_to_wavefunction)(state.params)
-            mean_grad = tree_map(
-                lambda g: jnp.mean(
-                    g
-                    * jnp.broadcast_to(
-                        energy_batch.reshape(-1, *([1] * (g.ndim - 1))), g.shape
-                    ),
-                    axis=0,
-                ),
-                jacobian_tree,
-            )
-
-            # def one_grad(energy, one_tree):
-            #    return tree_map(
-            #        lambda g: g * (energy.squeeze(-1) - mean_energy), one_tree
-            #    )
-
-            # batch_grad = jax.vmap(one_grad)(energy_batch, grad_log)
-
-            # grad_mean = tree_map(lambda g: 2.0 * jnp.mean(g, axis=0), batch_grad)
+            total_grad = jax.vjp(param_to_wavefunction, state.params)[1](energy_batch)[0]
+            mean_grad = tree_map(lambda g: g / energy_batch.shape[0], total_grad)
 
             return output_energy, mean_grad
 

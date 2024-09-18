@@ -1,4 +1,5 @@
 import hydra
+import jax
 
 from psiflax.data import GlobalSystem, AtomicNucleus, ElectronNucleusSystem
 from psiflax.trainer import PsiFormerTrainer
@@ -14,6 +15,7 @@ e = GlobalSystem(system_member=[b, d]).initialize_system()
 
 @hydra.main(version_base=None, config_path="./config", config_name="base_config")
 def execute(config: DictConfig) -> None:
+    jax.config.update("jax_traceback_filtering", 'off')
 
     trainer = PsiFormerTrainer(config, e)
 
