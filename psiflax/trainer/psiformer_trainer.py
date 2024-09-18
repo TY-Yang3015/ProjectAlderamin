@@ -17,7 +17,7 @@ from psiflax.shampoo.distributed_shampoo import distributed_shampoo as shampoo
 from psiflax.backbone.models import PsiFormer
 from psiflax.data import GlobalSystem
 from psiflax.sampler import MetropolisHastingSampler
-from psiflax.util import log_histograms
+from psiflax.utils import log_histograms
 
 
 class PsiFormerTrainer:
@@ -82,20 +82,23 @@ class PsiFormerTrainer:
         )
 
         # initialise optimiser
-        def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
-            return self.config.optimiser.adam.init_learning_rate * jnp.power(
-                (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay
-            )
-
         if self.config.optimiser.type.casefold() == "adam":
+            def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
+                return self.config.optimiser.adam.init_learning_rate * jnp.power(
+                    (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay
+                )
             self.optimiser = optax.adam(
                 learning_rate=learning_rate_schedule,
                 b1=self.config.optimiser.adam.b1,
                 b2=self.config.optimiser.adam.b2,
             )
         elif self.config.optimiser.type.casefold() == "shampoo":
+            def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
+                return self.config.optimiser.shampoo.learning_rate * jnp.power(
+                    (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay
+                )
             self.optimiser = shampoo(
-                learning_rate=self.config.optimiser.shampoo.learning_rate,
+                learning_rate=learning_rate_schedule,
                 beta1=self.config.optimiser.shampoo.beta1,
                 beta2=self.config.optimiser.shampoo.beta2,
                 block_size=self.config.optimiser.shampoo.block_size,
@@ -199,9 +202,6 @@ class PsiFormerTrainer:
             kinetic_term = kinetic_term.reshape(-1, 1)
             energy_batch = kinetic_term + electric_term
 
-            output_energy = energy_batch.mean()
-            output_var = energy_batch.var()
-
             # mad clipping
             mean_absolute_deviation = jnp.mean(
                 jnp.abs(energy_batch - jnp.median(energy_batch))
@@ -212,6 +212,9 @@ class PsiFormerTrainer:
                 jnp.median(energy_batch) - (n * mean_absolute_deviation),
                 jnp.median(energy_batch) + (n * mean_absolute_deviation),
             )
+
+            output_energy = energy_batch.mean()
+            output_var = energy_batch.var()
 
             def param_to_wavefunction(param_tree):
                 wavefunction = state.apply_fn(

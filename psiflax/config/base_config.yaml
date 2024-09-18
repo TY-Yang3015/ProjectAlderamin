@@ -1,18 +1,18 @@
 optimiser:
-  type: "adam"
+  type: "shampoo"
   adam:
     init_learning_rate: 3e-4
     b1: 0.9
     b2: 0.999
   shampoo:
-    learning_rate: 0.1
-    block_size: 128
-    beta1: 0.7
-    beta2: 0.9
-    diagonal_epsilon: 1e-24
-    matrix_epsilon: 1e-24
-    weight_decay: 0.01
-    start_preconditioning_step: 20
+    learning_rate: 1e-1
+    block_size: 64
+    beta1: 0.99
+    beta2: 0.999
+    diagonal_epsilon: 1e-8
+    matrix_epsilon: 1e-8
+    weight_decay: 0.0
+    start_preconditioning_step: 100
     preconditioning_compute_steps: 1
     statistics_compute_steps: 1
     best_effort_shape_interpretation: true
@@ -27,8 +27,8 @@ optimiser:
     decoupled_weight_decay: false
 
 lr:
-  delay: 10000.
-  decay: 1.
+  delay: 300.
+  decay: 4.
 
 hyperparam:
   batch_size: 4096
@@ -41,7 +41,7 @@ hyperparam:
   scale_input: false
 
 sampler:
-  burn_in_steps: 100
+  burn_in_steps: 0
   sample_steps: 10
   sampling_seed: 114514
   acceptance_range:

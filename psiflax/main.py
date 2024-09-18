@@ -8,7 +8,7 @@ from omegaconf import DictConfig
 
 a = AtomicNucleus("H", (0, 0, 0))
 b = ElectronNucleusSystem(system_nucleus=a, num_electrons=1).initialize_system()
-c = AtomicNucleus("H", (1.398, 0, 0))
+c = AtomicNucleus("H", (1.4011, 0, 0))
 d = ElectronNucleusSystem(system_nucleus=c, num_electrons=1).initialize_system()
 e = GlobalSystem(system_member=[b, d]).initialize_system()
 
@@ -44,19 +44,16 @@ def execute(config: DictConfig) -> None:
     x = xy_pos[:, 0]
     y = xy_pos[:, 1]
 
-    z = np.square((state.apply_fn({"params": state.params}, pos)))
+    z = np.square(np.exp(state.apply_fn({"params": state.params}, pos)))
     # z = np.clip(z, 0, 10)
     plt.figure(figsize=(12, 12))
-    plt.scatter(x, y, c=z, cmap="viridis", s=1)
 
     ax = plt.gca()
-    ax.scatter(pos[:, 1, 0], pos[:, 1, 1], c=z, cmap="viridis", s=0.1)
+    ax.scatter(pos[:, 1, 0], pos[:, 1, 1], c=z, cmap="viridis", s=5)
     ax.set_xlim(-1, 3)
     ax.set_ylim(-2, 2)
 
     plt.show()
-
-    print(state.params)
 
 
 if __name__ == "__main__":

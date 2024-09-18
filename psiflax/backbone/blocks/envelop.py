@@ -5,9 +5,10 @@ from einops import rearrange, reduce, repeat
 from jax import random
 import jax
 
+from psiflax.utils import logdet_matmul
 
 def custom_initializer(key, shape, dtype=jnp.float32):
-    return jax.random.normal(key, shape, dtype) * 0.1 + 10.0
+    return jax.random.normal(key, shape, dtype) * 0.1 + 1.
 
 
 class Envelop(nn.Module):
@@ -82,8 +83,8 @@ class Envelop(nn.Module):
         return wavefunction
 
 
-# import jax
+#import jax
 
-# print(Envelop(6, 5, 3).tabulate(jax.random.PRNGKey(0),
+#print(Envelop(6, 5, 3).tabulate(jax.random.PRNGKey(0),
 #                                jnp.ones((4096, 5, 3, 1)), jnp.ones((4096, 5, 30)),
 #                                depth=1, console_kwargs={'width': 150}))
