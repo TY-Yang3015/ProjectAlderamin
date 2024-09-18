@@ -1,5 +1,5 @@
 optimiser:
-  type: "shampoo"
+  type: "adam"
   adam:
     init_learning_rate: 3e-4
     b1: 0.9
@@ -27,8 +27,8 @@ optimiser:
     decoupled_weight_decay: false
 
 lr:
-  delay: 300.
-  decay: 4.
+  delay: 10000.
+  decay: 2.
 
 hyperparam:
   batch_size: 4096
