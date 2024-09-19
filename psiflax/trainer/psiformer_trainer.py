@@ -132,7 +132,10 @@ class PsiFormerTrainer:
     def _init_savedir(self) -> str:
         save_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
         save_dir = str(os.path.join(save_dir, "results"))
-        os.makedirs(save_dir)
+        try:
+            os.makedirs(save_dir)
+        except FileExistsError:
+            logging.info('save directory initialised already.')
         return save_dir
 
     @partial(jax.jit, static_argnums=0, donate_argnums=2)
@@ -305,8 +308,10 @@ class PsiFormerTrainer:
             if self.config.log.log_grad_and_params:
                 log_histograms(writer, state.params, grad, step)
 
-            writer.write_scalars(step, {"energy": energy_and_var[0], 'var': energy_and_var[1],
-                                        "pmean": pmean})
+            writer.write_scalars(step, {"energy": energy_and_var[0], "var": energy_and_var[1]})
+
+            if self.config.log.log_pmean:
+                writer.write_scalars(step, {"pmean": pmean})
 
             logger.info(f"step: {step} " 
                         f"energy: {energy_and_var[0]:.4f} "

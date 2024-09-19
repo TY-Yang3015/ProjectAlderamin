@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "alderamin"
+name = "psiflax"
 version = "0.1.0"
 description = "Flax-based implementation of Psiformer and its variants"
 requires-python = "<3.11"
@@ -24,9 +24,9 @@ dependencies = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "alderamin"}
+package-dir = {"" = "psiflax"}
 include-package-data = true
 zip-safe = true
 
 [tool.setuptools.packages.find]
-where = ["alderamin"]
+where = ["psiflax"]
