@@ -1,5 +1,5 @@
 optimiser:
-  type: "adam"
+  type: "shampoo"
   adam:
     init_learning_rate: 3e-4
     b1: 0.9
