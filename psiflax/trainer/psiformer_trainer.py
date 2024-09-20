@@ -242,8 +242,8 @@ class PsiFormerTrainer:
         return state, e_and_v, grad
 
     def train(self):
-
-        logging.info("initializing model.")
+        logger = logging.getLogger("loop")
+        logger.info("initializing model.")
         init_elec = jnp.ones(
             (
                 self.config.hyperparam.batch_size,
@@ -287,7 +287,6 @@ class PsiFormerTrainer:
             )
 
         writer = metric_writers.SummaryWriter(logdir=save_dir)
-        logger = logging.getLogger("loop")
 
         for step in range(self.config.hyperparam.step):
             batch, pmean = self.sampler.sample_psiformer(

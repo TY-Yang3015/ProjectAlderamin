@@ -71,4 +71,4 @@ ckpt:
 
 log:
   log_grad_and_params: false
-  log_pmove: false
+  log_pmove: true
