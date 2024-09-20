@@ -4,7 +4,7 @@ import jax.numpy as jnp
 
 class SimpleJastrow(nn.Module):
     """
-    make the electron-electron jastrow factor which satisfies the electron-electron cusp condition. see the
+    make the analytical electron-electron jastrow factor which satisfies the electron-electron cusp condition. see the
     https://arxiv.org/abs/2211.13672 PsiFormer paper for more details.
     """
 
@@ -56,6 +56,6 @@ class SimpleJastrow(nn.Module):
         return jnp.expand_dims(parallel_term + anti_term, -1)
 
 
-# (SimpleJastrow().tabulate(jax.random.PRNGKey(0),
+# print(SimpleJastrow().tabulate(jax.random.PRNGKey(0),
 #                               jnp.ones((4096, 4, 512)),
 #                               depth=1, console_kwargs={'width': 150}))

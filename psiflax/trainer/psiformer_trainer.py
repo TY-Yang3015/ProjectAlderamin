@@ -197,7 +197,7 @@ class PsiFormerTrainer:
 
             electric_term = get_electric_hamiltonian(batch)
 
-            laplacian_op = folx.forward_laplacian(get_wavefunction, 6)
+            laplacian_op = folx.forward_laplacian(get_wavefunction, 0)
             result = jax.vmap(laplacian_op)(batch)
             laplacian, jacobian = result.laplacian, result.jacobian.dense_array
             kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.0

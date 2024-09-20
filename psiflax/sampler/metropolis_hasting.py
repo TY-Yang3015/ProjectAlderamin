@@ -201,10 +201,10 @@ class MetropolisHastingSampler:
         memory = jnp.array([])
         for step in tqdm(range(num_steps)):
             self.walker_state, decisions = self._burn_in_step(self.walker_state)
-            memory = jnp.append(memory, decisions)
-            if step % self.sample_width_adapt_freq == 0:
-                memory, self.walker_state = self._adapt_step_size(
-                    memory, self.walker_state
+            self.global_memory.append(decisions)
+            if len(self.global_memory) % self.sample_width_adapt_freq == 0:
+                self.global_memory, self.walker_state = self._adapt_step_size(
+                    jnp.array(self.global_memory), self.walker_state
                 )
         return self.walker_state.positions
 

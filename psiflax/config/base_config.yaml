@@ -37,7 +37,7 @@ hyperparam:
   gradient_clipping: 1
   log_epsilon: 1e-24
 
-  mad_clipping_factor: 5
+  mad_clipping_factor: 2
   scale_input: false
 
 sampler:
@@ -71,4 +71,4 @@ ckpt:
 
 log:
   log_grad_and_params: false
-  log_pmove: true
+  log_pmean: true

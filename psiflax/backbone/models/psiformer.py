@@ -1,8 +1,8 @@
 import flax.linen as nn
 import jax.numpy as jnp
-from einops import rearrange, repeat
+from einops import repeat
 
-from psiflax.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop
+from psiflax.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop, MLPElectronJastrow
 
 
 class PsiFormer(nn.Module):
@@ -96,7 +96,7 @@ class PsiFormer(nn.Module):
                 electron_nuclear_features[:, :, :, :4]
                 * jnp.expand_dims(
                     (
-                        jnp.log(1.0 + electron_nuclear_features[..., 3])
+                        jnp.log(1. + electron_nuclear_features[..., 3])
                         / electron_nuclear_features[..., 3]
                     ),
                     3,
@@ -161,7 +161,7 @@ class PsiFormer(nn.Module):
 
         wavefunction *= jnp.exp(jastrow_factor)
 
-        return jnp.log(jnp.abs(wavefunction))
+        return jnp.log(jnp.abs(wavefunction) + 1e-12)
 
 
 """
