@@ -84,7 +84,9 @@ class MultiHeadCrossAttention(nn.Module):
                 use_bias=self.use_qkv_bias,
                 dtype=self.computation_dtype,
                 param_dtype=self.param_dtype,
-            )(x, inputs_k=context, inputs_v=context)
+            )(x,
+              inputs_k=x if context is None else context,
+              inputs_v=x if context is None else context,)
 
         x = x.reshape(shape)
         x = nn.softmax(x, axis=-1)
