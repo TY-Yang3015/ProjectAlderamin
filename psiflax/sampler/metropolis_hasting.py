@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import jax
 import jax.numpy as jnp
 import jax.random as random
@@ -50,10 +48,6 @@ class MetropolisHastingSampler:
         self.num_of_electrons: int = system.total_electrons
         self.nuc_positions: jnp.ndarray = jnp.array(
             [member.position for member in system.nucleus_list], dtype=computation_dtype
-        )
-        self.spins: jnp.ndarray = jnp.array(
-            [electron.spin for electron in system.electrons_list],
-            dtype=computation_dtype,
         )
 
         self.batch_size: int = batch_size

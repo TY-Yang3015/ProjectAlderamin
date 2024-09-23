@@ -1,5 +1,5 @@
 optimiser:
-  type: "shampoo"
+  type: "adam"
   adam:
     init_learning_rate: 3e-4
     b1: 0.9
@@ -37,7 +37,7 @@ hyperparam:
   gradient_clipping: 1
   log_epsilon: 1e-24
 
-  mad_clipping_factor: 2
+  mad_clipping_factor: 5
   scale_input: false
 
 sampler:
@@ -47,14 +47,14 @@ sampler:
   acceptance_range:
     - 0.5
     - 0.55
-  init_width: 1
+  init_width: 0.5
   sample_width: 0.02
   sample_width_adapt_freq: 100
   computation_dtype: "float32"
 
 psiformer:
   num_of_determinants: 16
-  num_of_blocks: 2
+  num_of_blocks: 4
   num_heads: 4
   qkv_size: 64
   use_memory_efficient_attention: false

@@ -7,12 +7,11 @@ from psiflax.trainer import PsiFormerTrainer
 from omegaconf import DictConfig
 
 
-li1 = AtomicNucleus("Li", (0, 0., 0.))
-li1 = ElectronNucleusSystem(system_nucleus=li1, num_electrons=3).initialize_system()
-li2 = AtomicNucleus("Li", (5.051, 0., 0.))
-li2 = ElectronNucleusSystem(system_nucleus=li2, num_electrons=3).initialize_system()
-e = GlobalSystem(system_member=[li1, li2]).initialize_system()
-print(e.summary)
+li = AtomicNucleus("Li", (0, 0., 0.))
+li = ElectronNucleusSystem(system_nucleus=li, num_electrons=3).initialize_system()
+h = AtomicNucleus("H", (3.015, 0., 0.))
+h = ElectronNucleusSystem(system_nucleus=h, num_electrons=1).initialize_system()
+e = GlobalSystem(system_member=[li, h]).initialize_system()
 
 @hydra.main(version_base=None, config_path="./config", config_name="base_config")
 def execute(config: DictConfig) -> None:

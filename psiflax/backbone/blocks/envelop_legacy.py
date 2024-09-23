@@ -5,7 +5,6 @@ from einops import rearrange, reduce, repeat
 from jax import random
 import jax
 
-from psiflax.utils import signed_log_sum_exp
 
 
 def custom_initializer(key, shape, dtype=jnp.float32):
