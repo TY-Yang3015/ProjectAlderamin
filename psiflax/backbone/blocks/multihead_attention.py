@@ -46,25 +46,6 @@ class MultiHeadCrossAttention(nn.Module):
         self, x: jnp.ndarray, train: bool, context: jnp.ndarray | None = None
     ) -> jnp.ndarray:
 
-        if self.use_norm is not False:
-            if self.group is not None:
-                x = nn.GroupNorm(
-                    num_groups=self.group
-                    if x.shape[-1] % self.group == 0
-                    else x.shape[-1],
-                    group_size=None,
-                    param_dtype=self.param_dtype,
-                )(x)
-            else:
-                x = nn.LayerNorm(
-                    dtype=self.computation_dtype,
-                    param_dtype=self.param_dtype,
-                    use_scale=True,
-                    use_bias=True,
-                    scale_init=nn.initializers.ones,
-                    bias_init=nn.initializers.zeros,
-                    epsilon=1e-5,
-                )(x)
         shape = x.shape
 
         if self.use_memory_efficient_attention:
@@ -87,6 +68,26 @@ class MultiHeadCrossAttention(nn.Module):
             )(x,
               inputs_k=x if context is None else context,
               inputs_v=x if context is None else context,)
+
+        if self.use_norm is not False:
+            if self.group is not None:
+                x = nn.GroupNorm(
+                    num_groups=self.group
+                    if x.shape[-1] % self.group == 0
+                    else x.shape[-1],
+                    group_size=None,
+                    param_dtype=self.param_dtype,
+                )(x)
+            else:
+                x = nn.LayerNorm(
+                    dtype=self.computation_dtype,
+                    param_dtype=self.param_dtype,
+                    use_scale=True,
+                    use_bias=True,
+                    scale_init=nn.initializers.ones,
+                    bias_init=nn.initializers.zeros,
+                    epsilon=1e-5,
+                )(x)
 
         x = x.reshape(shape)
         x = nn.softmax(x, axis=-1)
