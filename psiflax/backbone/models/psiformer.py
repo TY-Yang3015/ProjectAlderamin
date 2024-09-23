@@ -1,9 +1,10 @@
 import flax.linen as nn
+import jax
 import jax.numpy as jnp
 from einops import repeat
 
 from psiflax.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop, MLPElectronJastrow
-
+from psiflax.utils.logdet import signed_log_sum_exp
 
 class PsiFormer(nn.Module):
     """
@@ -161,7 +162,7 @@ class PsiFormer(nn.Module):
 
         wavefunction *= jnp.exp(jastrow_factor)
 
-        return jnp.log(jnp.abs(wavefunction) + 1e-12)
+        return jnp.log(jnp.abs(wavefunction))
 
 
 """

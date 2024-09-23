@@ -60,7 +60,10 @@ class PsiFormerBlock(nn.Module):
         return h
 
 
-# import jax
-# print(PsiformerBlock(4, False).tabulate(jax.random.PRNGKey(0),
+#import jax
+#print(PsiFormerBlock(4, False,
+#                     kernel_init=nn.initializers.kaiming_normal(),
+#                     bias_init=nn.initializers.zeros,
+#                     use_norm=False).tabulate(jax.random.PRNGKey(0),
 #                                       jnp.ones((4096, 5, 4)),
 #                                       depth=1, console_kwargs={'width': 150}))

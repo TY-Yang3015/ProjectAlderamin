@@ -5,7 +5,7 @@ from einops import rearrange, reduce, repeat
 from jax import random
 import jax
 
-from psiflax.utils import logdet_matmul
+
 
 def custom_initializer(key, shape, dtype=jnp.float32):
     return jax.random.normal(key, shape, dtype) * 0.1 + 1.
