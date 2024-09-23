@@ -181,7 +181,7 @@ class MetropolisHastingSampler:
         )
         return walker_state.replace(positions=updated_positions), accept_decisions
 
-    #@partial(jax.jit, static_argnums=0)
+    @partial(jax.jit, static_argnums=0)
     def _adapt_step_size(
             self, memory: jnp.ndarray, walker_state: WalkerState
     ) -> tuple[list, WalkerState]:

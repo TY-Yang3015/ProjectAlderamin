@@ -1,2 +1,2 @@
 from psiflax.utils.ckpt import *
-from psiflax.utils.logdet import logdet_matmul
+from psiflax.utils.logdet import signed_log_sum_exp
