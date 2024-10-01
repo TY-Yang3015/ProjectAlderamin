@@ -46,7 +46,7 @@ class Envelop(nn.Module):
         )
 
     def __call__(
-        self, elec_nuc_features: jnp.ndarray, psiformer_pre_det: jnp.ndarray
+            self, elec_nuc_features: jnp.ndarray, psiformer_pre_det: jnp.ndarray
     ) -> jnp.ndarray:
         """
         :param elec_nuc_features: jnp.ndarray contains electron-nuclear distance with dimension (batch,
@@ -75,7 +75,7 @@ class Envelop(nn.Module):
         # k i 1 I, b k i j I -> b k i j
         matrix_element_omega = (self.pi_kiI * jnp.exp(-exponent)).sum(axis=-1)
 
-        # b k i j -> b k i j
+        # b k i j, b k i j -> b k i j
         determinants = psiformer_pre_det * matrix_element_omega
 
         # b k i j -> b 1
@@ -84,8 +84,10 @@ class Envelop(nn.Module):
         return wavefunction
 
 
-#import jax
+"""
+import jax
 
-#print(Envelop(6, 5, 3).tabulate(jax.random.PRNGKey(0),
-#                                jnp.ones((4096, 5, 3, 1)), jnp.ones((4096, 5, 30)),
-#                                depth=1, console_kwargs={'width': 150}))
+print(Envelop(16, 5, 2).tabulate(jax.random.PRNGKey(0),
+                                jnp.ones((256, 5, 2, 1)), jnp.ones((256, 5, 80)),
+                                depth=1, console_kwargs={'width': 150}))
+"""

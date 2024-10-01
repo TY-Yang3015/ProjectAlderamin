@@ -58,10 +58,6 @@ class PsiFormerTrainer:
         self.nuc_positions = jnp.array(
             [member.position for member in self.system.nucleus_list]
         )
-        self.spins = jnp.array(
-            [electron.spin for electron in self.system.electrons_list],
-            dtype=jnp.float32,
-        )
 
         # build neural network model
         self.psiformer = PsiFormer(
@@ -76,7 +72,7 @@ class PsiFormerTrainer:
             group=self.config.psiformer.group,
             computation_dtype=self.config.psiformer.computation_dtype,
             param_dtype=self.config.psiformer.param_dtype,
-            spins=self.spins,
+            spin_counts=system.spin_counts,
             nuc_positions=self.nuc_positions,
             scale_input=self.config.hyperparam.scale_input,
         )
