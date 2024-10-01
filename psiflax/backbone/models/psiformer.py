@@ -30,7 +30,7 @@ class PsiFormer(nn.Module):
     num_of_electrons: int
     num_of_nucleus: int
 
-    spins: list
+    spin_counts: list
     nuc_positions: list
     scale_input: bool
 
@@ -65,10 +65,12 @@ class PsiFormer(nn.Module):
             dtype=self.computation_dtype,
         )
 
-        spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} e 1")
+        # spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} e 1")
+        spins = jnp.ones((coordinates.shape[0], self.spin_counts[0], 1))
+        spins = jnp.concatenate([spins, -jnp.ones((coordinates.shape[0], self.spin_counts[1], 1))], axis=1)
         single_electron_features = coordinates
         single_electron_features = jnp.concatenate(
-            [single_electron_features, spins_reshaped], axis=-1
+            [single_electron_features, spins], axis=-1
         )
 
         for i in range(self.num_of_electrons):
@@ -84,12 +86,12 @@ class PsiFormer(nn.Module):
                     )
                 )
 
-        spins_reshaped = repeat(
-            self.spins, f"e -> {coordinates.shape[0]} e {len(self.nuc_positions)} 1"
+        spins = repeat(
+            spins, f"b e 1 -> b e {len(self.nuc_positions)} 1"
         )
 
         electron_nuclear_features = jnp.concatenate(
-            [electron_nuclear_features, spins_reshaped], axis=-1
+            [electron_nuclear_features, spins], axis=-1
         )
 
         if self.scale_input:
@@ -175,7 +177,7 @@ print(PsiFormer(num_of_determinants=6,
                 num_heads=8,
                 qkv_size=64,
                 scale_input=True,
-                spins=jnp.array([-1, 1]),
+                spin_counts=[1, 1],
                 nuc_positions=jnp.array([[1, 0, 0], [0, 0, 0]])).tabulate(jax.random.PRNGKey(0),
                                        jnp.ones((512, 2, 3)),
                                        depth=1, console_kwargs={'width': 150}))

@@ -2,6 +2,7 @@ from psiflax.data.system import QuantumSystem, ElectronNucleusSystem
 from psiflax.data.particle_class import Electron, AtomicNucleus
 
 import attr
+import jax.numpy as jnp
 
 
 @attr.s(frozen=True)
@@ -48,6 +49,14 @@ class GlobalSystem(QuantumSystem):
             for j in range(self.system_member[i].num_electrons):
                 electron_to_nucleus.append(i)
         return electron_to_nucleus
+
+    @property
+    def spin_counts(self) -> list:
+        spin_counts = jnp.array(
+            [electron.spin for electron in self.electrons_list],
+            dtype=jnp.int32,
+        )
+        return jnp.bincount(spin_counts).tolist()
 
     def initialize_system(self):
         if abs(self.total_spin) not in [0, 1]:
