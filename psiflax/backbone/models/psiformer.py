@@ -6,6 +6,10 @@ from einops import repeat
 from psiflax.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop, MLPElectronJastrow
 from psiflax.utils.logdet import signed_log_sum_exp
 
+
+def custom_normal(key, shape, dtype=jnp.float32):
+    return jax.random.normal(jax.random.PRNGKey(0), shape, dtype) * 0.02
+
 class PsiFormer(nn.Module):
     """
     full implementation of PsiFormer, consists of three main pieces: jastrow factor, decaying
@@ -144,41 +148,59 @@ class PsiFormer(nn.Module):
                 bias_init=nn.initializers.normal(),
             )(x)
 
-        psiformer_pre_det = nn.Dense(
-            features=self.num_of_electrons * self.num_of_determinants,
-            kernel_init=nn.initializers.normal(),
-            use_bias=False,
-            dtype=self.computation_dtype,
-            param_dtype=self.param_dtype,
-        )(x)
+        electron_nuclear_features = jnp.expand_dims(electron_nuclear_features[..., 3], -1)
+        electron_nuclear_features_partitions = jnp.split(electron_nuclear_features,
+                                                         [self.spin_counts[0]],
+                                                         axis=1)
 
-        wavefunction = Envelop(
-            num_of_determinants=self.num_of_determinants,
-            num_of_electrons=self.num_of_electrons,
-            num_of_nucleus=self.num_of_nucleus,
-            param_dtype=self.param_dtype,
-            computation_dtype=self.computation_dtype,
-        )(jnp.expand_dims(electron_nuclear_features[..., 3], -1), psiformer_pre_det)
+        spin_orbitals = []
+        x_partitions = jnp.split(x, [self.spin_counts[0]], axis=1)
+        for i in range(len(self.spin_counts)):
+            orbital = nn.Dense(
+                features=self.num_of_electrons * self.num_of_determinants,
+                kernel_init=nn.initializers.normal(),
+                use_bias=False,
+                dtype=self.computation_dtype,
+                param_dtype=self.param_dtype,
+            )(x_partitions[i])
+            spin_orbitals.append(orbital)
 
+        determinants = []
+        for spin_orbital, electron_nuclear_features_partition in zip(spin_orbitals,
+                                                                     electron_nuclear_features_partitions):
+            determinant = Envelop(
+                num_of_determinants=self.num_of_determinants,
+                num_of_electrons=self.num_of_electrons,
+                num_of_nucleus=self.num_of_nucleus,
+                param_dtype=self.param_dtype,
+                computation_dtype=self.computation_dtype,
+            )(electron_nuclear_features_partition, spin_orbital)
+            determinants.append(determinant)
+
+        determinant = jnp.concatenate(determinants, axis=-1)
         jastrow_factor = SimpleJastrow()(single_electron_features)
 
-        wavefunction *= jnp.exp(jastrow_factor)
+        #wavefunction = jnp.sum(jnp.linalg.det(determinant), keepdims=True, axis=-1)
+        #wavefunction *= jnp.exp(jastrow_factor)
+        #return jnp.log(jnp.abs(wavefunction))
 
-        return jnp.log(jnp.abs(wavefunction))
+        determinant = determinant.at[:, :, 0, :].multiply(jnp.expand_dims(jnp.exp(jastrow_factor), -1))
+        wavefunction = jax.vmap(signed_log_sum_exp)(*jnp.linalg.slogdet(determinant))
+        return jnp.expand_dims(wavefunction, -1)
 
 
 """
 import jax
 
-print(PsiFormer(num_of_determinants=6,
-                num_of_electrons=2,
+print(PsiFormer(num_of_determinants=16,
+                num_of_electrons=6,
                 num_of_nucleus=2,
                 num_of_blocks=5,
                 num_heads=8,
                 qkv_size=64,
                 scale_input=True,
-                spin_counts=[1, 1],
+                spin_counts=[3, 3],
                 nuc_positions=jnp.array([[1, 0, 0], [0, 0, 0]])).tabulate(jax.random.PRNGKey(0),
-                                       jnp.ones((512, 2, 3)),
+                                       jnp.ones((512, 6, 3)),
                                        depth=1, console_kwargs={'width': 150}))
 #"""

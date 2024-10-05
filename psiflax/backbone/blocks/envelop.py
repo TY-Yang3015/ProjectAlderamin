@@ -37,12 +37,12 @@ class Envelop(nn.Module):
         self.pi_kiI = self.param(
             "pi_kiI",
             nn.initializers.ones,
-            (self.num_of_determinants, self.num_of_electrons, 1, self.num_of_nucleus),
+            (1, self.num_of_nucleus, self.num_of_determinants * self.num_of_electrons),
         )
         self.sigma_kiI = self.param(
             "omega_kiI",
             nn.initializers.ones,
-            (self.num_of_determinants, self.num_of_electrons, 1, self.num_of_nucleus),
+            (1, self.num_of_nucleus, self.num_of_determinants * self.num_of_electrons),
         )
 
     def __call__(
@@ -58,36 +58,33 @@ class Envelop(nn.Module):
 
         assert psiformer_pre_det.ndim == 3, "psiformer_pre_det must be 3d tensor."
 
-        psiformer_pre_det = psiformer_pre_det.reshape(
-            psiformer_pre_det.shape[0],
-            self.num_of_electrons,
-            self.num_of_electrons,
-            self.num_of_determinants,
-        )
-        psiformer_pre_det = rearrange(psiformer_pre_det, "b i j k -> b k i j")
-
-        elec_nuc_features = rearrange(elec_nuc_features, f"b j I 1 -> b 1 j I ")
-        elec_nuc_features = repeat(
-            elec_nuc_features, f"b 1 j I -> b {self.num_of_determinants} 1 j I"
-        )  # b k 1 j I
-        exponent = self.sigma_kiI * elec_nuc_features  # k i 1 I, b k 1 j I -> b k i j I
+        #psiformer_pre_det = psiformer_pre_det.reshape(
+        #    psiformer_pre_det.shape[0],
+        #    self.num_of_electrons,
+        #    -1,
+        #    self.num_of_determinants,
+        #)
+        #psiformer_pre_det = rearrange(psiformer_pre_det, "b i j k -> b k i j")
 
         # k i 1 I, b k i j I -> b k i j
-        matrix_element_omega = (self.pi_kiI * jnp.exp(-exponent)).sum(axis=-1)
+        matrix_element_omega = (self.pi_kiI * jnp.exp(-elec_nuc_features * self.sigma_kiI)).sum(axis=2)
 
         # b k i j, b k i j -> b k i j
         determinants = psiformer_pre_det * matrix_element_omega
 
-        # b k i j -> b 1
-        wavefunction = jnp.linalg.det(determinants).sum(axis=-1).reshape(-1, 1)
-
-        return wavefunction
+        determinants = jnp.reshape(determinants, (determinants.shape[0],
+                                                  determinants.shape[1], -1,
+                                                  self.num_of_determinants))
+        determinants = rearrange(determinants, "b i j k -> b k j i")
+        return determinants
 
 
 """
 import jax
 
-print(Envelop(16, 5, 2).tabulate(jax.random.PRNGKey(0),
-                                jnp.ones((256, 5, 2, 1)), jnp.ones((256, 5, 80)),
+print(Envelop(num_of_determinants=16,
+              num_of_electrons=5,
+              num_of_nucleus=2).tabulate(jax.random.PRNGKey(0),
+                                jnp.ones((256, 3, 2, 1)), jnp.ones((256, 3, 80)),
                                 depth=1, console_kwargs={'width': 150}))
-"""
+#"""

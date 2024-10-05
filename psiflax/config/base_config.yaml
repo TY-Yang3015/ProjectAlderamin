@@ -31,8 +31,8 @@ lr:
   decay: 2.
 
 hyperparam:
-  batch_size: 4096
-  step: 10000
+  batch_size: 1024
+  step: 3000
   training_seed: 114514
   gradient_clipping: 1
   log_epsilon: 1e-24

@@ -46,7 +46,7 @@ class PsiFormerBlock(nn.Module):
         )(x, False, None)
 
         h += x
-        h += nn.soft_sign(
+        h += nn.tanh(
             nn.Dense(
                 features=x.shape[-1],
                 use_bias=True,
@@ -58,7 +58,6 @@ class PsiFormerBlock(nn.Module):
         )
 
         return h
-
 
 #import jax
 #print(PsiFormerBlock(4, False,
