@@ -6,10 +6,6 @@ from einops import repeat
 from psiflax.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop, MLPElectronJastrow
 from psiflax.utils.logdet import signed_log_sum_exp
 
-
-def custom_normal(key, shape, dtype=jnp.float32):
-    return jax.random.normal(jax.random.PRNGKey(0), shape, dtype) * 0.02
-
 class PsiFormer(nn.Module):
     """
     full implementation of PsiFormer, consists of three main pieces: jastrow factor, decaying
@@ -180,13 +176,9 @@ class PsiFormer(nn.Module):
         determinant = jnp.concatenate(determinants, axis=-1)
         jastrow_factor = SimpleJastrow()(single_electron_features)
 
-        #wavefunction = jnp.sum(jnp.linalg.det(determinant), keepdims=True, axis=-1)
-        #wavefunction *= jnp.exp(jastrow_factor)
-        #return jnp.log(jnp.abs(wavefunction))
-
         determinant = determinant.at[:, :, 0, :].multiply(jnp.expand_dims(jnp.exp(jastrow_factor), -1))
-        wavefunction = jax.vmap(signed_log_sum_exp)(*jnp.linalg.slogdet(determinant))
-        return jnp.expand_dims(wavefunction, -1)
+        log_abs_wavefunction = jax.vmap(signed_log_sum_exp)(*jnp.linalg.slogdet(determinant))
+        return jnp.expand_dims(log_abs_wavefunction, -1)
 
 
 """

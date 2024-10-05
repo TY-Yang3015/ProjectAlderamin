@@ -34,7 +34,7 @@ hyperparam:
   batch_size: 1024
   step: 3000
   training_seed: 114514
-  gradient_clipping: 1
+  gradient_clipping: 1e-1
   log_epsilon: 1e-24
 
   mad_clipping_factor: 5
@@ -47,7 +47,7 @@ sampler:
   acceptance_range:
     - 0.5
     - 0.55
-  init_width: 0.5
+  init_width: 1
   sample_width: 0.02
   sample_width_adapt_freq: 100
   computation_dtype: "float32"

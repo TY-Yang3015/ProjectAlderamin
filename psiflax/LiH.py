@@ -16,14 +16,10 @@ e = GlobalSystem(system_member=[li, h]).initialize_system()
 @hydra.main(version_base=None, config_path="./config", config_name="base_config")
 def execute(config: DictConfig) -> None:
     print(e.summary)
-    jax.config.update("jax_debug_nans", True)
-    jax.config.update("jax_debug_infs", True)
-    jax.config.update("jax_traceback_filtering", 'off')
 
     trainer = PsiFormerTrainer(config, e)
 
     pos = trainer.sampler.walker_state.positions
-    print(pos.shape)
     import matplotlib.pyplot as plt
     from einops import rearrange
 
@@ -37,9 +33,7 @@ def execute(config: DictConfig) -> None:
     state = trainer.train()
 
     pos = trainer.sampler.walker_state.positions
-    print(pos.shape)
     import matplotlib.pyplot as plt
-    from einops import rearrange
     import numpy as np
 
     # xy_pos = rearrange(pos, 'b n i -> (b n) i')
