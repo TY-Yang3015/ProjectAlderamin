@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import jax.random as random
 from flax.training.train_state import TrainState
 from flax import struct
-from einops import repeat, rearrange
+from einops import rearrange
 from functools import partial
 
 from jax import Array

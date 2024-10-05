@@ -18,6 +18,7 @@ from psiflax.backbone.models import PsiFormer
 from psiflax.data import GlobalSystem
 from psiflax.sampler import MetropolisHastingSampler
 from psiflax.utils import log_histograms
+from psiflax.hamiltonian import VanillaHamiltonian
 
 
 class PsiFormerTrainer:
@@ -129,6 +130,13 @@ class PsiFormerTrainer:
             self.optimiser,
         )
 
+        self.hamiltonian = VanillaHamiltonian(
+            batch_size=self.config.hyperparam.batch_size,
+            num_of_electrons=self.num_of_electrons,
+            nuc_charges=self.nuc_charges,
+            nuc_positions=self.nuc_positions,
+        )
+
     def _init_savedir(self) -> str:
         save_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
         save_dir = str(os.path.join(save_dir, "results"))
@@ -140,70 +148,8 @@ class PsiFormerTrainer:
 
     @partial(jax.jit, static_argnums=0, donate_argnums=2)
     def _train_step(self, batch, state):
-        def get_electric_hamiltonian(coordinates: jnp.ndarray) -> jnp.ndarray:
-
-            elec_elec_term = jnp.zeros((self.config.hyperparam.batch_size, 1))
-            elec_nuc_term = jnp.zeros((self.config.hyperparam.batch_size, 1))
-            nuc_nuc_term = jnp.zeros((self.config.hyperparam.batch_size, 1))
-
-            for i in range(self.num_of_electrons):
-                for j in range(i):
-                    elec_elec_term = elec_elec_term.at[:, 0].add(
-                        1.0
-                        / (
-                            jnp.linalg.norm(
-                                coordinates[:, i, :] - coordinates[:, j, :], axis=-1
-                            )
-                        )
-                    )
-
-            for I in range(self.num_of_nucleus):
-                for i in range(self.num_of_electrons):
-                    elec_nuc_term = elec_nuc_term.at[:, 0].add(
-                        (
-                            self.nuc_charges[I]
-                            / (
-                                jnp.linalg.norm(
-                                    coordinates[:, i, :] - self.nuc_positions[I, :],
-                                    axis=-1,
-                                )
-                            )
-                        )
-                    )
-
-            for I in range(self.num_of_nucleus):
-                for J in range(I):
-                    nuc_nuc_term = nuc_nuc_term.at[:, 0].add(
-                        (self.nuc_charges[I] * self.nuc_charges[J])
-                        / jnp.linalg.norm(
-                            self.nuc_positions[I, :] - self.nuc_positions[J, :], axis=-1
-                        )
-                    )
-
-            return elec_elec_term - elec_nuc_term + nuc_nuc_term
-
         def get_energy_and_grad(params):
-            def get_wavefunction(raw_batch):
-                wavefunction = state.apply_fn(
-                    {"params": params},
-                    raw_batch,
-                )
-
-                # needed for folx.forward_laplacian
-                if wavefunction.shape == (1, 1):
-                    wavefunction = wavefunction[0][0]
-
-                return wavefunction
-
-            electric_term = get_electric_hamiltonian(batch)
-
-            laplacian_op = folx.forward_laplacian(get_wavefunction, 0)
-            result = jax.vmap(laplacian_op)(batch)
-            laplacian, jacobian = result.laplacian, result.jacobian.dense_array
-            kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.0
-
-            kinetic_term = kinetic_term.reshape(-1, 1)
-            energy_batch = kinetic_term + electric_term
+            energy_batch = self.hamiltonian.get_local_energy(state, batch)
 
             # mad clipping
             mean_absolute_deviation = jnp.mean(
