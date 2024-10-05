@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "psiflax"
-version = "0.1.0"
+version = "0.5.0"
 description = "Flax-based implementation of Psiformer and its variants"
-requires-python = "<3.11"
+requires-python = "<=3.11"
 license = {text = "Mozilla Public License Version 2.0"}
 dependencies = [
     "tensorflow",
@@ -20,7 +20,9 @@ dependencies = [
     "numpy",
     "tqdm",
     "matplotlib",
-    "periodictable"
+    "periodictable",
+    "attrs",
+    "jaxtyping"
 ]
 
 [tool.setuptools]

@@ -6,6 +6,7 @@ from einops import repeat
 from psiflax.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop, MLPElectronJastrow
 from psiflax.utils.logdet import signed_log_sum_exp
 
+
 class PsiFormer(nn.Module):
     """
     full implementation of PsiFormer, consists of three main pieces: jastrow factor, decaying
@@ -45,7 +46,7 @@ class PsiFormer(nn.Module):
     param_dtype: jnp.dtype | str = "float32"
 
     def convert_to_input(
-        self, coordinates: jnp.ndarray
+            self, coordinates: jnp.ndarray
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         """
         :param coordinates: the coordinates of the input coordinates, should have the shape
@@ -76,11 +77,11 @@ class PsiFormer(nn.Module):
         for i in range(self.num_of_electrons):
             for j in range(len(self.nuc_positions)):
                 electron_nuclear_features = electron_nuclear_features.at[
-                    :, i, j, :3
-                ].set(coordinates[:, i, :] - self.nuc_positions[j, :])
+                                            :, i, j, :3
+                                            ].set(coordinates[:, i, :] - self.nuc_positions[j, :])
                 electron_nuclear_features = electron_nuclear_features.at[
-                    :, i, j, 3
-                ].set(
+                                            :, i, j, 3
+                                            ].set(
                     jnp.linalg.norm(
                         coordinates[:, i, :] - self.nuc_positions[j, :], axis=-1
                     )
@@ -99,8 +100,8 @@ class PsiFormer(nn.Module):
                 electron_nuclear_features[:, :, :, :4]
                 * jnp.expand_dims(
                     (
-                        jnp.log(1. + electron_nuclear_features[..., 3])
-                        / electron_nuclear_features[..., 3]
+                            jnp.log(1. + electron_nuclear_features[..., 3])
+                            / electron_nuclear_features[..., 3]
                     ),
                     3,
                 )
@@ -110,8 +111,8 @@ class PsiFormer(nn.Module):
 
     @nn.compact
     def __call__(
-        self,
-        coordinates: jnp.ndarray,
+            self,
+            coordinates: jnp.ndarray,
     ) -> jnp.ndarray:
         """
         :param coordinates: the electronic nuclear features tensor, should have the shape
