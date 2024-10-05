@@ -65,9 +65,11 @@ class MultiHeadCrossAttention(nn.Module):
                 use_bias=self.use_qkv_bias,
                 dtype=self.computation_dtype,
                 param_dtype=self.param_dtype,
-            )(x,
-              inputs_k=x if context is None else context,
-              inputs_v=x if context is None else context,)
+            )(
+                x,
+                inputs_k=x if context is None else context,
+                inputs_v=x if context is None else context,
+            )
 
         if self.use_norm is not False:
             if self.group is not None:

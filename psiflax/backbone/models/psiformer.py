@@ -3,7 +3,12 @@ import jax
 import jax.numpy as jnp
 from einops import repeat
 
-from psiflax.backbone.blocks import PsiFormerBlock, SimpleJastrow, Envelop, MLPElectronJastrow
+from psiflax.backbone.blocks import (
+    PsiFormerBlock,
+    SimpleJastrow,
+    Envelop,
+    MLPElectronJastrow,
+)
 from psiflax.utils.logdet import signed_log_sum_exp
 
 
@@ -46,7 +51,7 @@ class PsiFormer(nn.Module):
     param_dtype: jnp.dtype | str = "float32"
 
     def convert_to_input(
-            self, coordinates: jnp.ndarray
+        self, coordinates: jnp.ndarray
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         """
         :param coordinates: the coordinates of the input coordinates, should have the shape
@@ -68,7 +73,9 @@ class PsiFormer(nn.Module):
 
         # spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} e 1")
         spins = jnp.ones((coordinates.shape[0], self.spin_counts[0], 1))
-        spins = jnp.concatenate([spins, -jnp.ones((coordinates.shape[0], self.spin_counts[1], 1))], axis=1)
+        spins = jnp.concatenate(
+            [spins, -jnp.ones((coordinates.shape[0], self.spin_counts[1], 1))], axis=1
+        )
         single_electron_features = coordinates
         single_electron_features = jnp.concatenate(
             [single_electron_features, spins], axis=-1
@@ -77,19 +84,17 @@ class PsiFormer(nn.Module):
         for i in range(self.num_of_electrons):
             for j in range(len(self.nuc_positions)):
                 electron_nuclear_features = electron_nuclear_features.at[
-                                            :, i, j, :3
-                                            ].set(coordinates[:, i, :] - self.nuc_positions[j, :])
+                    :, i, j, :3
+                ].set(coordinates[:, i, :] - self.nuc_positions[j, :])
                 electron_nuclear_features = electron_nuclear_features.at[
-                                            :, i, j, 3
-                                            ].set(
+                    :, i, j, 3
+                ].set(
                     jnp.linalg.norm(
                         coordinates[:, i, :] - self.nuc_positions[j, :], axis=-1
                     )
                 )
 
-        spins = repeat(
-            spins, f"b e 1 -> b e {len(self.nuc_positions)} 1"
-        )
+        spins = repeat(spins, f"b e 1 -> b e {len(self.nuc_positions)} 1")
 
         electron_nuclear_features = jnp.concatenate(
             [electron_nuclear_features, spins], axis=-1
@@ -100,8 +105,8 @@ class PsiFormer(nn.Module):
                 electron_nuclear_features[:, :, :, :4]
                 * jnp.expand_dims(
                     (
-                            jnp.log(1. + electron_nuclear_features[..., 3])
-                            / electron_nuclear_features[..., 3]
+                        jnp.log(1.0 + electron_nuclear_features[..., 3])
+                        / electron_nuclear_features[..., 3]
                     ),
                     3,
                 )
@@ -111,8 +116,8 @@ class PsiFormer(nn.Module):
 
     @nn.compact
     def __call__(
-            self,
-            coordinates: jnp.ndarray,
+        self,
+        coordinates: jnp.ndarray,
     ) -> jnp.ndarray:
         """
         :param coordinates: the electronic nuclear features tensor, should have the shape
@@ -145,10 +150,12 @@ class PsiFormer(nn.Module):
                 bias_init=nn.initializers.normal(),
             )(x)
 
-        electron_nuclear_features = jnp.expand_dims(electron_nuclear_features[..., 3], -1)
-        electron_nuclear_features_partitions = jnp.split(electron_nuclear_features,
-                                                         [self.spin_counts[0]],
-                                                         axis=1)
+        electron_nuclear_features = jnp.expand_dims(
+            electron_nuclear_features[..., 3], -1
+        )
+        electron_nuclear_features_partitions = jnp.split(
+            electron_nuclear_features, [self.spin_counts[0]], axis=1
+        )
 
         spin_orbitals = []
         x_partitions = jnp.split(x, [self.spin_counts[0]], axis=1)
@@ -163,8 +170,9 @@ class PsiFormer(nn.Module):
             spin_orbitals.append(orbital)
 
         determinants = []
-        for spin_orbital, electron_nuclear_features_partition in zip(spin_orbitals,
-                                                                     electron_nuclear_features_partitions):
+        for spin_orbital, electron_nuclear_features_partition in zip(
+            spin_orbitals, electron_nuclear_features_partitions
+        ):
             determinant = Envelop(
                 num_of_determinants=self.num_of_determinants,
                 num_of_electrons=self.num_of_electrons,
@@ -177,8 +185,12 @@ class PsiFormer(nn.Module):
         determinant = jnp.concatenate(determinants, axis=-1)
         jastrow_factor = SimpleJastrow()(single_electron_features)
 
-        determinant = determinant.at[:, :, 0, :].multiply(jnp.expand_dims(jnp.exp(jastrow_factor), -1))
-        log_abs_wavefunction = jax.vmap(signed_log_sum_exp)(*jnp.linalg.slogdet(determinant))
+        determinant = determinant.at[:, :, 0, :].multiply(
+            jnp.expand_dims(jnp.exp(jastrow_factor), -1)
+        )
+        log_abs_wavefunction = jax.vmap(signed_log_sum_exp)(
+            *jnp.linalg.slogdet(determinant)
+        )
         return jnp.expand_dims(log_abs_wavefunction, -1)
 
 

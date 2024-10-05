@@ -22,7 +22,7 @@ e = GlobalSystem(system_member=[c, h1, h2, h3, h4]).initialize_system()
 
 @hydra.main(version_base=None, config_path="./config", config_name="base_config")
 def execute(config: DictConfig) -> None:
-    jax.config.update("jax_traceback_filtering", 'off')
+    jax.config.update("jax_traceback_filtering", "off")
 
     trainer = PsiFormerTrainer(config, e)
     trainer.train()

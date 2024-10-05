@@ -7,18 +7,19 @@ from psiflax.trainer import PsiFormerTrainer
 from omegaconf import DictConfig
 
 
-li1 = AtomicNucleus("Li", (-5.051/2, 0., 0.))
+li1 = AtomicNucleus("Li", (-5.051 / 2, 0.0, 0.0))
 li1 = ElectronNucleusSystem(system_nucleus=li1, num_electrons=3).initialize_system()
-li2 = AtomicNucleus("Li", (5.051/2, 0., 0.))
+li2 = AtomicNucleus("Li", (5.051 / 2, 0.0, 0.0))
 li2 = ElectronNucleusSystem(system_nucleus=li2, num_electrons=3).initialize_system()
 e = GlobalSystem(system_member=[li1, li2]).initialize_system()
 print(e.summary)
+
 
 @hydra.main(version_base=None, config_path="./config", config_name="base_config")
 def execute(config: DictConfig) -> None:
     jax.config.update("jax_debug_nans", True)
     jax.config.update("jax_debug_infs", True)
-    jax.config.update("jax_traceback_filtering", 'off')
+    jax.config.update("jax_traceback_filtering", "off")
     print(e.summary)
 
     trainer = PsiFormerTrainer(config, e)

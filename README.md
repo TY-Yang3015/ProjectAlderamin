@@ -6,8 +6,8 @@ Monte-Carlo models using the Google
 deep learning library.
 
 ## Quick Start
-Use `cd` command to move to the `PsiFlax` directory, and run the following command 
-to install `psiflax`. 
+Use `cd` command to move to the `PsiFlax` directory, and run the following command
+to install `psiflax`.
 
 ```shell
 pip install -e .
@@ -41,7 +41,7 @@ if __name__ == "__main__":
 ```
 
 This should yield an energy value around 1.174, which can be used to check
-your installation. 
+your installation.
 
 ### Reference
 - [Implementation of PsiFormer and FermiNet in

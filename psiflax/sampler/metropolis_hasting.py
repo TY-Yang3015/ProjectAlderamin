@@ -21,11 +21,11 @@ class WalkerState:
     def propose(self):
         new_key, subkey = random.split(self.key)
         move = (
-                random.normal(
-                    subkey,
-                    self.positions.shape,
-                )
-                * self.step_size
+            random.normal(
+                subkey,
+                self.positions.shape,
+            )
+            * self.step_size
         )
         proposed_positions = self.positions + move
         return self.replace(key=new_key), proposed_positions
@@ -33,17 +33,17 @@ class WalkerState:
 
 class MetropolisHastingSampler:
     def __init__(
-            self,
-            system: GlobalSystem,
-            batch_size: int,
-            sampling_seed: int,
-            acceptance_range: list[float, float],
-            init_width: float,
-            sample_width: float,
-            sample_width_adapt_freq: int,
-            log_epsilon: float = 1e-12,
-            scale_input: bool = True,
-            computation_dtype: jnp.dtype | str = "float32",
+        self,
+        system: GlobalSystem,
+        batch_size: int,
+        sampling_seed: int,
+        acceptance_range: list[float, float],
+        init_width: float,
+        sample_width: float,
+        sample_width_adapt_freq: int,
+        log_epsilon: float = 1e-12,
+        scale_input: bool = True,
+        computation_dtype: jnp.dtype | str = "float32",
     ):
         self.num_of_electrons: int = system.total_electrons
         self.nuc_positions: jnp.ndarray = jnp.array(
@@ -74,12 +74,12 @@ class MetropolisHastingSampler:
 
     def initialise_walkers(self) -> WalkerState:
         init_positions: jnp.ndarray = (
-                random.normal(
-                    self.sampling_key,
-                    shape=(self.num_of_walkers, self.num_of_electrons, 3),
-                    dtype=self.computation_dtype,
-                )
-                * self.init_width
+            random.normal(
+                self.sampling_key,
+                shape=(self.num_of_walkers, self.num_of_electrons, 3),
+                dtype=self.computation_dtype,
+            )
+            * self.init_width
         )
 
         nuc_pos_array: jnp.ndarray = self.nuc_positions[self.electron_nuc_pair]
@@ -92,13 +92,13 @@ class MetropolisHastingSampler:
             step_size=jnp.ones(
                 (self.num_of_walkers, 1, 1), dtype=self.computation_dtype
             )
-                      * self.sample_width,
+            * self.sample_width,
             key=random.PRNGKey(*random.randint(self.sampling_key, (1,), -1e5, 1e5)),
         )
 
     @partial(jax.jit, static_argnums=0)
     def log_multivariate_gaussian(
-            self, x: jnp.ndarray, mu: jnp.ndarray, sigma: jnp.ndarray
+        self, x: jnp.ndarray, mu: jnp.ndarray, sigma: jnp.ndarray
     ) -> jnp.ndarray:
         """
         Compute the log probability of x under a multivariate Gaussian distribution.
@@ -126,7 +126,7 @@ class MetropolisHastingSampler:
 
         # compute the log probability
         log_probs = -0.5 * (
-                3 * jnp.log(2 * jnp.pi) + logdet + mahalanobis_term
+            3 * jnp.log(2 * jnp.pi) + logdet + mahalanobis_term
         )  # (batch, electrons)
 
         return log_probs
@@ -141,7 +141,7 @@ class MetropolisHastingSampler:
 
     @partial(jax.jit, static_argnums=0)
     def _burn_in_step(
-            self, walker_state: WalkerState
+        self, walker_state: WalkerState
     ) -> tuple[WalkerState, jnp.ndarray]:
         walker_state, proposed_positions = walker_state.propose()
 
@@ -157,18 +157,18 @@ class MetropolisHastingSampler:
         return walker_state, jnp.array(decisions, dtype=jnp.int32)
 
     def _mh_accept_step(
-            self,
-            walker_state: WalkerState,
-            accept_probs: jnp.ndarray,
-            new_positions: jnp.ndarray,
+        self,
+        walker_state: WalkerState,
+        accept_probs: jnp.ndarray,
+        new_positions: jnp.ndarray,
     ) -> tuple[WalkerState, jnp.ndarray]:
         accept_decisions = (
-                random.uniform(
-                    walker_state.key,
-                    shape=(walker_state.positions.shape[0],),
-                    dtype=self.computation_dtype,
-                )
-                < accept_probs
+            random.uniform(
+                walker_state.key,
+                shape=(walker_state.positions.shape[0],),
+                dtype=self.computation_dtype,
+            )
+            < accept_probs
         )
         updated_positions = jnp.where(
             accept_decisions[:, None, None], new_positions, walker_state.positions
@@ -177,15 +177,13 @@ class MetropolisHastingSampler:
 
     @partial(jax.jit, static_argnums=0)
     def _adapt_step_size(
-            self, memory: jnp.ndarray, walker_state: WalkerState
+        self, memory: jnp.ndarray, walker_state: WalkerState
     ) -> tuple[list, WalkerState]:
         accept_rate = jnp.mean(rearrange(memory, "i j -> j i"), axis=-1)
         accept_rate = accept_rate.reshape(accept_rate.shape[0], 1, 1)
         new_size = walker_state.step_size
 
-        new_size /= jnp.where(
-            accept_rate < jnp.min(self.acceptance_range), 1.1, 1.0
-        )
+        new_size /= jnp.where(accept_rate < jnp.min(self.acceptance_range), 1.1, 1.0)
         new_size *= jnp.where(accept_rate > jnp.max(self.acceptance_range), 1.1, 1.0)
 
         memory = []
@@ -204,7 +202,7 @@ class MetropolisHastingSampler:
 
     @partial(jax.jit, static_argnums=0)
     def _psiformer_sample_step(
-            self, walker_state: WalkerState, psiformer_train_state: TrainState
+        self, walker_state: WalkerState, psiformer_train_state: TrainState
     ) -> tuple[WalkerState, jnp.ndarray, jnp.ndarray]:
         walker_state, proposed_positions = walker_state.propose()
 
@@ -235,11 +233,11 @@ class MetropolisHastingSampler:
         )
         return walker_state, decisions, accept_probs.mean()
 
-    #@partial(jax.jit, static_argnums=(0, 2))
+    # @partial(jax.jit, static_argnums=(0, 2))
     def sample_psiformer(
-            self, psiformer_train_state: TrainState, sample_step: int
+        self, psiformer_train_state: TrainState, sample_step: int
     ) -> tuple[Array, float]:
-        pmean_final = 0.
+        pmean_final = 0.0
         for _ in range(sample_step):
             self.walker_state, decisions, pmean = self._psiformer_sample_step(
                 self.walker_state, psiformer_train_state

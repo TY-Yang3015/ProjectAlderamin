@@ -59,8 +59,9 @@ class PsiFormerBlock(nn.Module):
 
         return h
 
-#import jax
-#print(PsiFormerBlock(4, False,
+
+# import jax
+# print(PsiFormerBlock(4, False,
 #                     kernel_init=nn.initializers.kaiming_normal(),
 #                     bias_init=nn.initializers.zeros,
 #                     use_norm=False).tabulate(jax.random.PRNGKey(0),

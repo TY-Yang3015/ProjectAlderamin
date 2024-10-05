@@ -79,20 +79,24 @@ class PsiFormerTrainer:
 
         # initialise optimiser
         if self.config.optimiser.type.casefold() == "adam":
+
             def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
                 return self.config.optimiser.adam.init_learning_rate * jnp.power(
                     (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay
                 )
+
             self.optimiser = optax.adam(
                 learning_rate=learning_rate_schedule,
                 b1=self.config.optimiser.adam.b1,
                 b2=self.config.optimiser.adam.b2,
             )
         elif self.config.optimiser.type.casefold() == "shampoo":
+
             def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
                 return self.config.optimiser.shampoo.learning_rate * jnp.power(
                     (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay
                 )
+
             self.optimiser = shampoo(
                 learning_rate=learning_rate_schedule,
                 beta1=self.config.optimiser.shampoo.beta1,
@@ -131,7 +135,7 @@ class PsiFormerTrainer:
         try:
             os.makedirs(save_dir)
         except FileExistsError:
-            logging.info('save directory initialised already.')
+            logging.info("save directory initialised already.")
         return save_dir
 
     @partial(jax.jit, static_argnums=0, donate_argnums=2)
@@ -157,13 +161,13 @@ class PsiFormerTrainer:
                 for i in range(self.num_of_electrons):
                     elec_nuc_term = elec_nuc_term.at[:, 0].add(
                         (
-                                self.nuc_charges[I]
-                                / (
-                                    jnp.linalg.norm(
-                                        coordinates[:, i, :] - self.nuc_positions[I, :],
-                                        axis=-1,
-                                    )
+                            self.nuc_charges[I]
+                            / (
+                                jnp.linalg.norm(
+                                    coordinates[:, i, :] - self.nuc_positions[I, :],
+                                    axis=-1,
                                 )
+                            )
                         )
                     )
 
@@ -227,7 +231,9 @@ class PsiFormerTrainer:
             energy_batch -= mean_energy
             energy_batch = energy_batch.squeeze(-1)
 
-            total_grad = jax.vjp(param_to_wavefunction, state.params)[1](energy_batch)[0]
+            total_grad = jax.vjp(param_to_wavefunction, state.params)[1](energy_batch)[
+                0
+            ]
             mean_grad = tree_map(lambda g: g / energy_batch.shape[0], total_grad)
 
             return (output_energy, output_var), mean_grad
@@ -303,15 +309,19 @@ class PsiFormerTrainer:
             if self.config.log.log_grad_and_params:
                 log_histograms(writer, state.params, grad, step)
 
-            writer.write_scalars(step, {"energy": energy_and_var[0], "var": energy_and_var[1]})
+            writer.write_scalars(
+                step, {"energy": energy_and_var[0], "var": energy_and_var[1]}
+            )
 
             if self.config.log.log_pmean:
                 writer.write_scalars(step, {"pmean": pmean})
 
-            logger.info(f"step: {step} " 
-                        f"energy: {energy_and_var[0]:.4f} "
-                        f"var: {energy_and_var[1]:.4f} "
-                        f"pmean: {pmean:.4f}")
+            logger.info(
+                f"step: {step} "
+                f"energy: {energy_and_var[0]:.4f} "
+                f"var: {energy_and_var[1]:.4f} "
+                f"pmean: {pmean:.4f}"
+            )
 
         writer.flush()
 

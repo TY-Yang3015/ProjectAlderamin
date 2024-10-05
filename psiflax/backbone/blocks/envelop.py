@@ -9,7 +9,7 @@ from psiflax.utils import signed_log_sum_exp
 
 
 def custom_initializer(key, shape, dtype=jnp.float32):
-    return jax.random.normal(key, shape, dtype) * 0.1 + 1.
+    return jax.random.normal(key, shape, dtype) * 0.1 + 1.0
 
 
 class Envelop(nn.Module):
@@ -46,7 +46,7 @@ class Envelop(nn.Module):
         )
 
     def __call__(
-            self, elec_nuc_features: jnp.ndarray, psiformer_pre_det: jnp.ndarray
+        self, elec_nuc_features: jnp.ndarray, psiformer_pre_det: jnp.ndarray
     ) -> jnp.ndarray:
         """
         :param elec_nuc_features: jnp.ndarray contains electron-nuclear distance with dimension (batch,
@@ -59,14 +59,22 @@ class Envelop(nn.Module):
         assert psiformer_pre_det.ndim == 3, "psiformer_pre_det must be 3d tensor."
 
         # k i 1 I, b k i j I -> b k i j
-        matrix_element_omega = (self.pi_kiI * jnp.exp(-elec_nuc_features * self.sigma_kiI)).sum(axis=2)
+        matrix_element_omega = (
+            self.pi_kiI * jnp.exp(-elec_nuc_features * self.sigma_kiI)
+        ).sum(axis=2)
 
         # b k i j, b k i j -> b k i j
         determinants = psiformer_pre_det * matrix_element_omega
 
-        determinants = jnp.reshape(determinants, (determinants.shape[0],
-                                                  determinants.shape[1], -1,
-                                                  self.num_of_determinants))
+        determinants = jnp.reshape(
+            determinants,
+            (
+                determinants.shape[0],
+                determinants.shape[1],
+                -1,
+                self.num_of_determinants,
+            ),
+        )
         determinants = rearrange(determinants, "b i j k -> b k j i")
         return determinants
 
