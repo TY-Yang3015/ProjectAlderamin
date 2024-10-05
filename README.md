@@ -15,7 +15,7 @@ pip install -e .
 
 `psiflax` is compatible with any version of python `>=3.10`. `psiflax` uses `hydra`
 to manage config files. To run a VMC for a hydrogen atom, execute the
-following script:
+following script in the `PsiFlax` directory:
 
 ```python
 import hydra
