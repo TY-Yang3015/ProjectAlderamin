@@ -51,6 +51,7 @@ def execute(config: DictConfig) -> None:
 
     ax = plt.gca()
     ax.scatter(pos[:, 1, 0], pos[:, 1, 1], c=z, cmap="viridis", s=5)
+    ax.scatter(pos[:, 0, 0], pos[:, 0, 1], c=z, cmap="viridis", s=5)
     ax.set_xlim(-1, 3)
     ax.set_ylim(-2, 2)
 
