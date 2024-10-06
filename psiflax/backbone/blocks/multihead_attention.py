@@ -4,7 +4,6 @@ import jax
 from psiflax.backbone.blocks.memory_efficient_attention import (
     MemoryEfficientAttention,
 )
-from einops import rearrange
 
 
 class MultiHeadCrossAttention(nn.Module):

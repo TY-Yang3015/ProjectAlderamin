@@ -5,8 +5,8 @@ optimiser:
     b1: 0.9
     b2: 0.999
   shampoo:
-    learning_rate: 1e-1
-    block_size: 64
+    learning_rate: 1e-3
+    block_size: 128
     beta1: 0.99
     beta2: 0.999
     diagonal_epsilon: 1e-8
@@ -28,11 +28,11 @@ optimiser:
 
 lr:
   delay: 10000.
-  decay: 2.
+  decay: 1.
 
 hyperparam:
-  batch_size: 1024
-  step: 3000
+  batch_size: 4096
+  step: 200000
   training_seed: 114514
   gradient_clipping: 1
   log_epsilon: 1e-24
@@ -60,7 +60,7 @@ psiformer:
   use_memory_efficient_attention: false
   use_norm: false
   group: null
-  complex_output: ture
+  complex_output: false
 
   computation_dtype: "float32"
   param_dtype: "float32"

@@ -46,7 +46,7 @@ class PsiFormerBlock(nn.Module):
         )(x, False, None)
 
         h += x
-        h += nn.soft_sign(
+        h += nn.tanh(
             nn.Dense(
                 features=x.shape[-1],
                 use_bias=True,

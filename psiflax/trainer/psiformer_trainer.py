@@ -105,6 +105,7 @@ class PsiFormerTrainer:
                     (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay
                 )
 
+            # noinspection PyArgumentList
             self.optimiser = shampoo(
                 learning_rate=learning_rate_schedule,
                 beta1=self.config.optimiser.shampoo.beta1,
@@ -133,10 +134,12 @@ class PsiFormerTrainer:
             )
 
         self.optimiser = optax.chain(
-            optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
+            #optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
             self.optimiser,
+            #optax.ema(0.99)
         )
 
+        # noinspection PyArgumentList
         self.hamiltonian = VanillaHamiltonian(
             batch_size=self.config.hyperparam.batch_size,
             num_of_electrons=self.num_of_electrons,

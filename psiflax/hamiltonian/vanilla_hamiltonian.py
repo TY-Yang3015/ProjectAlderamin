@@ -17,7 +17,7 @@ class VanillaHamiltonian:
     :cvar nuc_charges: the array of nuclear charges.
     :cvar nuc_positions: the array of nuclear positions.
     :cvar complex_output: ``bool``. whether to turn on
-                            complex output or not.
+                            complex output.
     """
 
     batch_size: int

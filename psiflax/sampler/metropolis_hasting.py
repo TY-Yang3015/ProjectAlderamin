@@ -190,13 +190,13 @@ class MetropolisHastingSampler:
         return memory, walker_state.replace(step_size=new_size)
 
     def burn_in(self, num_steps) -> jnp.ndarray:
-        memory = jnp.array([])
-        for step in tqdm(range(num_steps)):
+        memory = []
+        for _ in tqdm(range(num_steps)):
             self.walker_state, decisions = self._burn_in_step(self.walker_state)
-            self.global_memory.append(decisions)
-            if len(self.global_memory) % self.sample_width_adapt_freq == 0:
-                self.global_memory, self.walker_state = self._adapt_step_size(
-                    jnp.array(self.global_memory), self.walker_state
+            memory.append(decisions)
+            if len(memory) % self.sample_width_adapt_freq == 0:
+                memory, self.walker_state = self._adapt_step_size(
+                    jnp.array(memory), self.walker_state
                 )
         return self.walker_state.positions
 

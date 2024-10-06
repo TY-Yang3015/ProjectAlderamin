@@ -1,7 +1,7 @@
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from einops import repeat, rearrange
+from einops import repeat
 
 from psiflax.backbone.blocks import (
     PsiFormerBlock,
@@ -136,7 +136,7 @@ class PsiFormer(nn.Module):
             use_bias=False,
             dtype=self.computation_dtype,
             param_dtype=self.param_dtype,
-            kernel_init=nn.initializers.normal(),
+            kernel_init=nn.initializers.variance_scaling(1.0, mode='fan_in', distribution='normal'),
         )(x)
 
         for _ in range(self.num_of_blocks):
@@ -147,8 +147,8 @@ class PsiFormer(nn.Module):
                 group=self.group,
                 param_dtype=self.param_dtype,
                 computation_dtype=self.computation_dtype,
-                kernel_init=nn.initializers.normal(),
-                bias_init=nn.initializers.normal(),
+                kernel_init=nn.initializers.variance_scaling(1.0, mode='fan_in', distribution='normal'),
+                bias_init=nn.initializers.normal(1),
             )(x)
 
         electron_nuclear_features = jnp.expand_dims(
@@ -164,7 +164,7 @@ class PsiFormer(nn.Module):
             if self.complex_output:
                 orbital = nn.Dense(
                     features=self.num_of_electrons * self.num_of_determinants * 2,
-                    kernel_init=nn.initializers.normal(),
+                    kernel_init=nn.initializers.variance_scaling(1.0, mode='fan_in', distribution='normal'),
                     use_bias=False,
                     dtype=self.computation_dtype,
                     param_dtype=self.param_dtype,
@@ -175,7 +175,7 @@ class PsiFormer(nn.Module):
             else:
                 orbital = nn.Dense(
                     features=self.num_of_electrons * self.num_of_determinants,
-                    kernel_init=nn.initializers.normal(),
+                    kernel_init=nn.initializers.variance_scaling(1.0, mode='fan_in', distribution='normal'),
                     use_bias=False,
                     dtype=self.computation_dtype,
                     param_dtype=self.param_dtype,
