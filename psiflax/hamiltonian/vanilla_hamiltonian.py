@@ -16,12 +16,15 @@ class VanillaHamiltonian:
     :cvar num_of_electrons: int, the number of electrons.
     :cvar nuc_charges: the array of nuclear charges.
     :cvar nuc_positions: the array of nuclear positions.
+    :cvar complex_output: ``bool``. whether to turn on
+                            complex output or not.
     """
 
     batch_size: int
     num_of_electrons: int
     nuc_charges: jnp.ndarray
     nuc_positions: jnp.ndarray
+    complex_output: bool
 
     def coulomb_potential_terms(self, coordinates: jnp.ndarray) -> jnp.ndarray:
         """
@@ -73,36 +76,72 @@ class VanillaHamiltonian:
         return elec_elec_term - elec_nuc_term + nuc_nuc_term
 
     def get_local_energy(
-        self, state: TrainState, batch: jnp.ndarray, complex_out: bool = False
+        self, state: TrainState, batch: jnp.ndarray
     ) -> jnp.ndarray:
         """
         calculate the local energy of a given state and electron configuration.
         :param state: ``TrainState``, the training state of the neural network ansatz.
         :param batch: ``jnp.ndarray`` with shape ``(batch_size, num_of_electrons, 3)``
-        :param complex_out: ``bool``, optional, default ``False``. whether to turn on
-                            complex output or not.
         """
-
-        def get_wavefunction(raw_batch):
-            wavefunction = state.apply_fn(
-                {"params": state.params},
-                raw_batch,
-            )
-
-            # needed for folx.forward_laplacian
-            if wavefunction.shape == (1, 1):
-                wavefunction = wavefunction[0][0]
-
-            return wavefunction
 
         electric_term = self.coulomb_potential_terms(batch)
 
-        laplacian_op = folx.forward_laplacian(get_wavefunction, 0)
-        result = jax.vmap(laplacian_op)(batch)
-        laplacian, jacobian = result.laplacian, result.jacobian.dense_array
-        kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.0
+        if self.complex_output:
+            def get_wavefunction(raw_batch):
+                wavefunction, _ = state.apply_fn(
+                    {"params": state.params},
+                    raw_batch,
+                )
 
-        kinetic_term = kinetic_term.reshape(-1, 1)
-        energy_batch = kinetic_term + electric_term
+                # needed for folx.forward_laplacian
+                if wavefunction.shape == (1, 1):
+                    wavefunction = wavefunction[0][0]
+
+                return wavefunction
+
+            def get_phase(raw_batch):
+                _, phase = state.apply_fn(
+                    {"params": state.params},
+                    raw_batch,
+                )
+
+                # needed for folx.forward_laplacian
+                if phase.shape == (1, 1):
+                    phase = phase[0][0]
+
+                return phase
+
+            laplacian_op = folx.forward_laplacian(get_wavefunction, 0)
+            result = jax.vmap(laplacian_op)(batch)
+            laplacian, jacobian = result.laplacian, result.jacobian.dense_array
+            kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.0
+
+            laplacian_op = folx.forward_laplacian(get_phase, 0)
+            result = jax.vmap(laplacian_op)(batch)
+            laplacian, jacobian = result.laplacian, result.jacobian.dense_array
+            kinetic_term += (jnp.square(jacobian).sum(-1)) / 2.0
+
+            kinetic_term = kinetic_term.reshape(-1, 1)
+            energy_batch = kinetic_term + electric_term
+        else:
+            def get_wavefunction(raw_batch):
+                wavefunction = state.apply_fn(
+                    {"params": state.params},
+                    raw_batch,
+                )[0]
+
+                # needed for folx.forward_laplacian
+                if wavefunction.shape == (1, 1):
+                    wavefunction = wavefunction[0][0]
+
+                return wavefunction
+
+            laplacian_op = folx.forward_laplacian(get_wavefunction, 0)
+            result = jax.vmap(laplacian_op)(batch)
+            laplacian, jacobian = result.laplacian, result.jacobian.dense_array
+            kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.0
+
+            kinetic_term = kinetic_term.reshape(-1, 1)
+            energy_batch = kinetic_term + electric_term
 
         return energy_batch

@@ -1,7 +1,7 @@
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from einops import repeat
+from einops import repeat, rearrange
 
 from psiflax.backbone.blocks import (
     PsiFormerBlock,
@@ -47,11 +47,12 @@ class PsiFormer(nn.Module):
     use_norm: bool = False
     group: None | int = None
 
+    complex_output: bool = False
     computation_dtype: jnp.dtype | str = "float32"
     param_dtype: jnp.dtype | str = "float32"
 
     def convert_to_input(
-        self, coordinates: jnp.ndarray
+            self, coordinates: jnp.ndarray
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         """
         :param coordinates: the coordinates of the input coordinates, should have the shape
@@ -84,11 +85,11 @@ class PsiFormer(nn.Module):
         for i in range(self.num_of_electrons):
             for j in range(len(self.nuc_positions)):
                 electron_nuclear_features = electron_nuclear_features.at[
-                    :, i, j, :3
-                ].set(coordinates[:, i, :] - self.nuc_positions[j, :])
+                                            :, i, j, :3
+                                            ].set(coordinates[:, i, :] - self.nuc_positions[j, :])
                 electron_nuclear_features = electron_nuclear_features.at[
-                    :, i, j, 3
-                ].set(
+                                            :, i, j, 3
+                                            ].set(
                     jnp.linalg.norm(
                         coordinates[:, i, :] - self.nuc_positions[j, :], axis=-1
                     )
@@ -105,8 +106,8 @@ class PsiFormer(nn.Module):
                 electron_nuclear_features[:, :, :, :4]
                 * jnp.expand_dims(
                     (
-                        jnp.log(1.0 + electron_nuclear_features[..., 3])
-                        / electron_nuclear_features[..., 3]
+                            jnp.log(1.0 + electron_nuclear_features[..., 3])
+                            / electron_nuclear_features[..., 3]
                     ),
                     3,
                 )
@@ -116,9 +117,9 @@ class PsiFormer(nn.Module):
 
     @nn.compact
     def __call__(
-        self,
-        coordinates: jnp.ndarray,
-    ) -> jnp.ndarray:
+            self,
+            coordinates: jnp.ndarray,
+    ) -> jnp.ndarray | tuple[jnp.ndarray, jnp.ndarray]:
         """
         :param coordinates: the electronic nuclear features tensor, should have the shape
                                            (batch, num_of_electrons, 3)
@@ -160,25 +161,36 @@ class PsiFormer(nn.Module):
         spin_orbitals = []
         x_partitions = jnp.split(x, [self.spin_counts[0]], axis=1)
         for i in range(len(self.spin_counts)):
-            orbital = nn.Dense(
-                features=self.num_of_electrons * self.num_of_determinants,
-                kernel_init=nn.initializers.normal(),
-                use_bias=False,
-                dtype=self.computation_dtype,
-                param_dtype=self.param_dtype,
-            )(x_partitions[i])
+            if self.complex_output:
+                orbital = nn.Dense(
+                    features=self.num_of_electrons * self.num_of_determinants * 2,
+                    kernel_init=nn.initializers.normal(),
+                    use_bias=False,
+                    dtype=self.computation_dtype,
+                    param_dtype=self.param_dtype,
+                )(x_partitions[i])
+                orbital = orbital.reshape(orbital.shape[0], orbital.shape[1],
+                                          self.num_of_electrons * self.num_of_determinants, 2)
+                orbital = orbital[:, :, :, 0] + 1.0j * orbital[:, :, :, 1]
+            else:
+                orbital = nn.Dense(
+                    features=self.num_of_electrons * self.num_of_determinants,
+                    kernel_init=nn.initializers.normal(),
+                    use_bias=False,
+                    dtype=self.computation_dtype,
+                    param_dtype=self.param_dtype,
+                )(x_partitions[i])
             spin_orbitals.append(orbital)
 
         determinants = []
         for spin_orbital, electron_nuclear_features_partition in zip(
-            spin_orbitals, electron_nuclear_features_partitions
+                spin_orbitals, electron_nuclear_features_partitions
         ):
             determinant = Envelop(
                 num_of_determinants=self.num_of_determinants,
                 num_of_electrons=self.num_of_electrons,
                 num_of_nucleus=self.num_of_nucleus,
                 param_dtype=self.param_dtype,
-                computation_dtype=self.computation_dtype,
             )(electron_nuclear_features_partition, spin_orbital)
             determinants.append(determinant)
 
@@ -188,10 +200,16 @@ class PsiFormer(nn.Module):
         determinant = determinant.at[:, :, 0, :].multiply(
             jnp.expand_dims(jnp.exp(jastrow_factor), -1)
         )
+
         log_abs_wavefunction = jax.vmap(signed_log_sum_exp)(
             *jnp.linalg.slogdet(determinant)
         )
-        return jnp.expand_dims(log_abs_wavefunction, -1)
+
+        if self.complex_output:
+            log_abs_wavefunction, wavefunction_phase = log_abs_wavefunction
+            return jnp.expand_dims(log_abs_wavefunction, -1), jnp.expand_dims(wavefunction_phase, -1)
+        else:
+            return (jnp.expand_dims(log_abs_wavefunction[0], -1), )
 
 
 """
@@ -205,7 +223,8 @@ print(PsiFormer(num_of_determinants=16,
                 qkv_size=64,
                 scale_input=True,
                 spin_counts=[3, 3],
-                nuc_positions=jnp.array([[1, 0, 0], [0, 0, 0]])).tabulate(jax.random.PRNGKey(0),
-                                       jnp.ones((512, 6, 3)),
-                                       depth=1, console_kwargs={'width': 150}))
+                nuc_positions=jnp.array([[1, 0, 0], [0, 0, 0]]),
+                complex_output=True).tabulate(jax.random.PRNGKey(0),
+                                              jnp.ones((512, 6, 3)),
+                                              depth=1, console_kwargs={'width': 150}))
 #"""

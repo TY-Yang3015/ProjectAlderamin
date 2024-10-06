@@ -16,4 +16,7 @@ def signed_log_sum_exp(signs, log_dets):
     log_abs_sum = max_log_det + jnp.log(jnp.abs(signed_sum))
 
     # return the log-sum-exp result with the correct sign
-    return log_abs_sum
+    if signed_sum.dtype == jnp.complex64 or jnp.complex128:
+        return log_abs_sum, jnp.angle(signed_sum)
+    else:
+        return log_abs_sum

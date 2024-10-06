@@ -1,3 +1,4 @@
+import jax
 from flax.training.train_state import TrainState
 import jax.numpy as jnp
 from clu import metric_writers
@@ -5,7 +6,6 @@ from jax import random, tree_map
 from jax.lib import xla_bridge
 from functools import partial
 from omegaconf import DictConfig, OmegaConf
-import jax
 import logging
 import optax
 import hydra
@@ -28,6 +28,12 @@ class PsiFormerTrainer:
         logger = logging.getLogger("env")
         logger.setLevel(logging.INFO)
         # log environment information
+        try:
+            jax.distributed.initialize()
+        except Exception as e:
+            logger.warning(f'multihost initialization failed with error: {e}')
+
+        logger.info(f'total devices on all available hosts: {jax.device_count()}')
         logger.info(f"JAX backend: {xla_bridge.get_backend().platform}")
 
         logger.info(f"JAX process: {jax.process_index() + 1} / {jax.process_count()}")
@@ -76,6 +82,7 @@ class PsiFormerTrainer:
             spin_counts=system.spin_counts,
             nuc_positions=self.nuc_positions,
             scale_input=self.config.hyperparam.scale_input,
+            complex_output=self.config.psiformer.complex_output,
         )
 
         # initialise optimiser
@@ -135,6 +142,7 @@ class PsiFormerTrainer:
             num_of_electrons=self.num_of_electrons,
             nuc_charges=self.nuc_charges,
             nuc_positions=self.nuc_positions,
+            complex_output=self.config.psiformer.complex_output
         )
 
     def _init_savedir(self) -> str:
@@ -169,7 +177,7 @@ class PsiFormerTrainer:
                 wavefunction = state.apply_fn(
                     {"params": param_tree},
                     batch,
-                )
+                )[0]
 
                 return wavefunction.squeeze(-1)
 
@@ -177,9 +185,8 @@ class PsiFormerTrainer:
             energy_batch -= mean_energy
             energy_batch = energy_batch.squeeze(-1)
 
-            total_grad = jax.vjp(param_to_wavefunction, state.params)[1](energy_batch)[
-                0
-            ]
+            total_grad = jax.vjp(param_to_wavefunction, state.params
+                                 )[1](energy_batch)[0]
             mean_grad = tree_map(lambda g: g / energy_batch.shape[0], total_grad)
 
             return (output_energy, output_var), mean_grad

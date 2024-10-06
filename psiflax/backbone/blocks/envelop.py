@@ -1,16 +1,8 @@
 import flax.linen as nn
 import jax.numpy as jnp
 
-from einops import rearrange, reduce, repeat
-from jax import random
-import jax
-
-from psiflax.utils import signed_log_sum_exp
-
-
-def custom_initializer(key, shape, dtype=jnp.float32):
-    return jax.random.normal(key, shape, dtype) * 0.1 + 1.0
-
+from einops import rearrange
+from functools import partial
 
 class Envelop(nn.Module):
     """
@@ -22,15 +14,13 @@ class Envelop(nn.Module):
     :cvar num_of_electrons: the number of electrons in the system.
     :cvar num_of_nucleus: the number of nucleus in the system.
 
-    :cvar computation_dtype: the dtype of the computation.
-    :cvar param_dtype: the dtype of the parameters. this is a dummy input for this class.
+    :cvar param_dtype: the dtype of the parameters.
     """
 
     num_of_determinants: int
     num_of_electrons: int
     num_of_nucleus: int
 
-    computation_dtype: jnp.dtype = jnp.float32
     param_dtype: jnp.dtype = jnp.float32
 
     def setup(self) -> None:
@@ -38,34 +28,35 @@ class Envelop(nn.Module):
             "pi_kiI",
             nn.initializers.ones,
             (1, self.num_of_nucleus, self.num_of_determinants * self.num_of_electrons),
+            self.param_dtype
         )
         self.sigma_kiI = self.param(
             "omega_kiI",
             nn.initializers.ones,
             (1, self.num_of_nucleus, self.num_of_determinants * self.num_of_electrons),
+            self.param_dtype
         )
 
     def __call__(
-        self, elec_nuc_features: jnp.ndarray, psiformer_pre_det: jnp.ndarray
+            self, elec_nuc_features: jnp.ndarray, psiformer_pre_det: jnp.ndarray
     ) -> jnp.ndarray:
         """
         :param elec_nuc_features: jnp.ndarray contains electron-nuclear distance with dimension (batch,
-                                  num_of_electrons, num_of_nucleus, 1).
+                                  num_of_spin_electrons, num_of_nucleus, 1).
         :param psiformer_pre_det: psiformer electron-nuclear channel output with dimension
-                                  (batch, num_of_electrons, number_of_determinants x number_of_electrons).
+                                  (batch, num_of_spin_electrons, number_of_determinants x number_of_electrons).
         :return: weighted sum of all determinants with envelop multiplied with shape (batch, 1)
         """
 
-        assert psiformer_pre_det.ndim == 3, "psiformer_pre_det must be 3d tensor."
-
-        # k i 1 I, b k i j I -> b k i j
+        # 1 I k*N, (b s I 1 * 1 I k*N) -> b s I k*N -> b s k*N
         matrix_element_omega = (
-            self.pi_kiI * jnp.exp(-elec_nuc_features * self.sigma_kiI)
+                self.pi_kiI * jnp.exp(-elec_nuc_features * self.sigma_kiI)
         ).sum(axis=2)
 
-        # b k i j, b k i j -> b k i j
+        # b s k*N, b s k*N -> b s k*N
         determinants = psiformer_pre_det * matrix_element_omega
 
+        # b s k*N -> b s N k
         determinants = jnp.reshape(
             determinants,
             (
@@ -75,7 +66,10 @@ class Envelop(nn.Module):
                 self.num_of_determinants,
             ),
         )
-        determinants = rearrange(determinants, "b i j k -> b k j i")
+
+        # b s N k -> b k N s
+        determinants = rearrange(determinants, "b s N k -> b k N s")
+
         return determinants
 
 

@@ -34,7 +34,7 @@ hyperparam:
   batch_size: 1024
   step: 3000
   training_seed: 114514
-  gradient_clipping: 1e-1
+  gradient_clipping: 1
   log_epsilon: 1e-24
 
   mad_clipping_factor: 5
@@ -60,6 +60,7 @@ psiformer:
   use_memory_efficient_attention: false
   use_norm: false
   group: null
+  complex_output: ture
 
   computation_dtype: "float32"
   param_dtype: "float32"

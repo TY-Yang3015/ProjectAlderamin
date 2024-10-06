@@ -40,7 +40,7 @@ def execute(config: DictConfig) -> None:
     x = xy_pos[:, 0]
     y = xy_pos[:, 1]
 
-    z = np.square(np.exp(state.apply_fn({"params": state.params}, pos)))
+    z = np.square(np.exp(state.apply_fn({"params": state.params}, pos)))[0]
     # z = np.clip(z, 0, 10)
     plt.figure(figsize=(12, 12))
 

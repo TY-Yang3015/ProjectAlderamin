@@ -1,5 +1,4 @@
 import hydra
-import jax
 
 from psiflax.data import GlobalSystem, AtomicNucleus, ElectronNucleusSystem
 from psiflax.trainer import PsiFormerTrainer
@@ -15,8 +14,6 @@ e = GlobalSystem(system_member=[b, d]).initialize_system()
 
 @hydra.main(version_base=None, config_path="./config", config_name="base_config")
 def execute(config: DictConfig) -> None:
-    jax.config.update("jax_traceback_filtering", "off")
-    jax.config.update("jax_debug_nans", True)
 
     trainer = PsiFormerTrainer(config, e)
 
@@ -45,7 +42,7 @@ def execute(config: DictConfig) -> None:
     x = xy_pos[:, 0]
     y = xy_pos[:, 1]
 
-    z = np.square(np.exp(state.apply_fn({"params": state.params}, pos)))
+    z = np.square(np.exp(state.apply_fn({"params": state.params}, pos)))[0]
     # z = np.clip(z, 0, 10)
     plt.figure(figsize=(12, 12))
 

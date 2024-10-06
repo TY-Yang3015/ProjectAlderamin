@@ -210,14 +210,14 @@ class MetropolisHastingSampler:
             (
                 psiformer_train_state.apply_fn(
                     {"params": psiformer_train_state.params}, walker_state.positions
-                )
+                )[0]
             )
         )
         proposed_log_prob = 2 * (
             (
                 psiformer_train_state.apply_fn(
                     {"params": psiformer_train_state.params}, proposed_positions
-                )
+                )[0]
             )
         )
         log_ratio = proposed_log_prob - current_log_prob
@@ -233,7 +233,6 @@ class MetropolisHastingSampler:
         )
         return walker_state, decisions, accept_probs.mean()
 
-    # @partial(jax.jit, static_argnums=(0, 2))
     def sample_psiformer(
         self, psiformer_train_state: TrainState, sample_step: int
     ) -> tuple[Array, float]:
