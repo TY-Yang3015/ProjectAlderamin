@@ -31,7 +31,7 @@ lr:
   decay: 1.
 
 hyperparam:
-  batch_size: 4096
+  batch_size: 1024
   step: 200000
   training_seed: 114514
   gradient_clipping: 1
@@ -49,12 +49,12 @@ sampler:
     - 0.55
   init_width: 1
   sample_width: 0.02
-  sample_width_adapt_freq: 100
+  sample_width_adapt_freq: 1000
   computation_dtype: "float32"
 
 psiformer:
   num_of_determinants: 16
-  num_of_blocks: 4
+  num_of_blocks: 2
   num_heads: 4
   qkv_size: 64
   use_memory_efficient_attention: false

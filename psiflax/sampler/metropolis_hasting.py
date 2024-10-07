@@ -179,6 +179,7 @@ class MetropolisHastingSampler:
     def _adapt_step_size(
         self, memory: jnp.ndarray, walker_state: WalkerState
     ) -> tuple[list, WalkerState]:
+        # (steps, walkers) -> (walkers, steps) -> (walkers, )
         accept_rate = jnp.mean(rearrange(memory, "i j -> j i"), axis=-1)
         accept_rate = accept_rate.reshape(accept_rate.shape[0], 1, 1)
         new_size = walker_state.step_size
@@ -243,7 +244,7 @@ class MetropolisHastingSampler:
             )
             pmean_final += pmean
             self.global_memory.append(decisions)
-            if len(self.global_memory) % self.sample_width_adapt_freq == 0:
+            if (len(self.global_memory) % self.sample_width_adapt_freq == 0) and (len(self.global_memory) > 0):
                 self.global_memory, self.walker_state = self._adapt_step_size(
                     jnp.array(self.global_memory), self.walker_state
                 )

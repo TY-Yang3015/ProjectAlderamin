@@ -88,26 +88,21 @@ class PsiFormerTrainer:
         # initialise optimiser
         if self.config.optimiser.type.casefold() == "adam":
 
-            def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
-                return self.config.optimiser.adam.init_learning_rate * jnp.power(
-                    (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay
-                )
-
             self.optimiser = optax.adam(
-                learning_rate=learning_rate_schedule,
+                learning_rate=optax.exponential_decay(init_value=self.config.optimiser.adam.init_learning_rate,
+                                                      transition_steps=self.config.lr.delay,
+                                                      decay_rate=self.config.lr.decay),
                 b1=self.config.optimiser.adam.b1,
                 b2=self.config.optimiser.adam.b2,
             )
-        elif self.config.optimiser.type.casefold() == "shampoo":
 
-            def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
-                return self.config.optimiser.shampoo.learning_rate * jnp.power(
-                    (1.0 / (1.0 + (t_ / self.config.lr.delay))), self.config.lr.decay
-                )
+        elif self.config.optimiser.type.casefold() == "shampoo":
 
             # noinspection PyArgumentList
             self.optimiser = shampoo(
-                learning_rate=learning_rate_schedule,
+                learning_rate=optax.exponential_decay(init_value=self.config.optimiser.adam.init_learning_rate,
+                                                      transition_steps=self.config.lr.delay,
+                                                      decay_rate=self.config.lr.decay),
                 beta1=self.config.optimiser.shampoo.beta1,
                 beta2=self.config.optimiser.shampoo.beta2,
                 block_size=self.config.optimiser.shampoo.block_size,
@@ -134,7 +129,7 @@ class PsiFormerTrainer:
             )
 
         self.optimiser = optax.chain(
-            #optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
+            optax.clip_by_global_norm(self.config.hyperparam.gradient_clipping),
             self.optimiser,
             #optax.ema(0.99)
         )

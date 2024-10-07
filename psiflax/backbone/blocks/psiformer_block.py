@@ -1,7 +1,7 @@
 import flax.linen as nn
 import jax.numpy as jnp
 
-from psiflax.backbone.blocks import MultiHeadCrossAttention
+from psiflax.backbone.blocks import MultiHeadAttention
 
 
 class PsiFormerBlock(nn.Module):
@@ -32,38 +32,51 @@ class PsiFormerBlock(nn.Module):
 
     @nn.compact
     def __call__(self, x: jnp.ndarray):
-        h = MultiHeadCrossAttention(
+        embed_dim = x.shape[-1]
+
+        h = MultiHeadAttention(
             num_heads=self.num_heads,
-            output_channels=x.shape[-1],
-            use_memory_efficient_attention=self.use_memory_efficient_attention,
+            output_channels=embed_dim,
             use_norm=self.use_norm,
             group=self.group,
             use_qkv_bias=False,
-            use_dropout=False,
-            computation_dtype=self.computation_dtype,
             kernel_init=self.kernel_init,
+            computation_dtype=self.computation_dtype,
             param_dtype=self.param_dtype,
-        )(x, False, None)
+        )(x)
 
-        h += x
-        h += nn.tanh(
+        x += h
+        x += nn.tanh(
             nn.Dense(
-                features=x.shape[-1],
+                features=embed_dim,
                 use_bias=True,
                 kernel_init=self.kernel_init,
                 bias_init=self.bias_init,
                 dtype=self.computation_dtype,
                 param_dtype=self.param_dtype,
-            )(h)
+            )(
+                nn.tanh(
+                    nn.Dense(
+                        features=256,
+                        use_bias=True,
+                        kernel_init=self.kernel_init,
+                        bias_init=self.bias_init,
+                        dtype=self.computation_dtype,
+                        param_dtype=self.param_dtype,
+                    )(x)
+                )
+            )
         )
 
-        return h
+        return x
 
 
-# import jax
-# print(PsiFormerBlock(4, False,
-#                     kernel_init=nn.initializers.kaiming_normal(),
-#                     bias_init=nn.initializers.zeros,
-#                     use_norm=False).tabulate(jax.random.PRNGKey(0),
-#                                       jnp.ones((4096, 5, 4)),
-#                                       depth=1, console_kwargs={'width': 150}))
+"""
+import jax
+print(PsiFormerBlock(4, False,
+                     kernel_init=nn.initializers.kaiming_normal(),
+                     bias_init=nn.initializers.zeros,
+                     use_norm=False).tabulate(jax.random.PRNGKey(0),
+                                       jnp.ones((4096, 5, 256)),
+                                       depth=1, console_kwargs={'width': 150}))
+#"""
