@@ -1,5 +1,8 @@
+import functools
+
 import jax
 from flax.training.train_state import TrainState
+from flax.linen import get_sharding
 import jax.numpy as jnp
 from clu import metric_writers
 from jax import random, tree_map
@@ -12,7 +15,10 @@ import hydra
 import os
 import orbax.checkpoint as ocp
 
-import psiflax.folx as folx
+from jax.sharding import Mesh, PartitionSpec, NamedSharding
+from jax.lax import with_sharding_constraint
+from jax.experimental import mesh_utils
+
 from psiflax.shampoo.distributed_shampoo import distributed_shampoo as shampoo
 from psiflax.backbone.models import PsiFormer
 from psiflax.data import GlobalSystem
@@ -24,6 +30,8 @@ from psiflax.hamiltonian import VanillaHamiltonian
 class PsiFormerTrainer:
     def __init__(self, config: DictConfig, system: GlobalSystem):
         self.config = config
+        logger = logging.getLogger()
+        logger.setLevel(logging.WARNING)
 
         logger = logging.getLogger("env")
         logger.setLevel(logging.INFO)
@@ -31,7 +39,10 @@ class PsiFormerTrainer:
         try:
             jax.distributed.initialize()
         except Exception as e:
-            logger.warning(f'multihost initialization failed with error: {e}')
+            if jax.process_count() == 1:
+                logger.info('single host environment detected.')
+            else:
+                logger.warning(f'multihost initialization failed with error: {e}')
 
         logger.info(f'total devices on all available hosts: {jax.device_count()}')
         logger.info(f"JAX backend: {xla_bridge.get_backend().platform}")
@@ -196,7 +207,18 @@ class PsiFormerTrainer:
 
     def train(self):
         logger = logging.getLogger("loop")
+        logger.setLevel(logging.INFO)
         logger.info("initializing model.")
+
+        device_mesh = mesh_utils.create_device_mesh(
+            (jax.process_count(), int(jax.device_count() / jax.process_count())))
+        mesh = Mesh(devices=device_mesh, axis_names=('data', 'model'))
+
+        def mesh_sharding(pspec: PartitionSpec) -> NamedSharding:
+            return NamedSharding(mesh, pspec)
+
+        x_sharding = mesh_sharding(PartitionSpec('data', None))
+
         init_elec = jnp.ones(
             (
                 self.config.hyperparam.batch_size,
@@ -209,19 +231,24 @@ class PsiFormerTrainer:
         rngs = {"params": random.PRNGKey(self.config.hyperparam.training_seed)}
         params = jax.jit(self.psiformer.init)(rngs, init_elec)["params"]
 
-        state = TrainState.create(
-            apply_fn=self.psiformer.apply,
-            params=params,
-            tx=self.optimiser,
-        )
+        def init_fn(key, x, model, optimizer):
+            variables = model.init(key, x)  # Initialize the model.
+            state = TrainState.create(  # Create a `TrainState`.
+                apply_fn=model.apply,
+                params=variables['params'],
+                tx=optimizer)
+            return state
 
-        sharding = jax.sharding.NamedSharding(
-            mesh=jax.sharding.Mesh(jax.devices(), axis_names="model"),
-            spec=jax.sharding.PartitionSpec(),
-        )
+        abstract_param_tree = jax.eval_shape(functools.partial(init_fn, model=self.psiformer,
+                                                               optimizer=self.optimiser),
+                                             rngs, init_elec)
+        state_sharding = get_sharding(abstract_param_tree, mesh)
 
-        create_sharded_array = lambda x: jax.device_put(x, sharding)
-        state = jax.tree_util.tree_map(create_sharded_array, state)
+        jit_init_fn = jax.jit(init_fn, static_argnums=(2, 3),
+                              in_shardings=(mesh_sharding(()), x_sharding),  # PRNG key and x
+                              out_shardings=state_sharding)
+
+        state = jit_init_fn(rngs, init_elec, self.psiformer, self.optimiser)
 
         save_dir = self._init_savedir()
 

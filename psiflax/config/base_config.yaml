@@ -32,7 +32,7 @@ lr:
 
 hyperparam:
   batch_size: 1024
-  step: 200000
+  step: 5000
   training_seed: 114514
   gradient_clipping: 1
   log_epsilon: 1e-24
