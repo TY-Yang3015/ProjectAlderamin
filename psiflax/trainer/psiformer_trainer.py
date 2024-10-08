@@ -158,24 +158,42 @@ class PsiFormerTrainer:
             energy_batch = self.hamiltonian.get_local_energy(state, batch)
 
             # mad clipping
-            mean_absolute_deviation = jnp.mean(
-                jnp.abs(energy_batch - jnp.median(energy_batch))
-            )
             n = self.config.hyperparam.mad_clipping_factor
-            energy_batch = jnp.clip(
-                energy_batch,
-                jnp.median(energy_batch) - (n * mean_absolute_deviation),
-                jnp.median(energy_batch) + (n * mean_absolute_deviation),
-            )
+            if self.config.psiformer.complex_output:
+                real_energy_batch = jnp.real(energy_batch)
+                imag_energy_batch = jnp.imag(energy_batch)
 
-            output_energy = energy_batch.mean()
-            output_var = energy_batch.var()
+                real_mad = jnp.mean(jnp.abs(real_energy_batch - jnp.median(real_energy_batch)))
+                imag_mad = jnp.mean(jnp.abs(imag_energy_batch - jnp.median(imag_energy_batch)))
+
+                real_energy_batch = jnp.clip(real_energy_batch,
+                                             jnp.median(real_energy_batch) - (n * real_mad),
+                                             jnp.median(real_energy_batch) + (n * real_mad))
+                imag_energy_batch = jnp.clip(imag_energy_batch,
+                                             jnp.median(imag_energy_batch) - (n * imag_mad),
+                                             jnp.median(imag_energy_batch) + (n * imag_mad))
+
+                energy_batch = real_energy_batch + 1.j*imag_energy_batch
+            else:
+                mean_absolute_deviation = jnp.mean(
+                    jnp.abs(energy_batch - jnp.median(energy_batch))
+                )
+                energy_batch = jnp.clip(
+                    energy_batch,
+                    jnp.median(energy_batch) - (n * mean_absolute_deviation),
+                    jnp.median(energy_batch) + (n * mean_absolute_deviation),
+                )
+
+            output_energy = jnp.real(energy_batch.mean())
+            output_var = jnp.real(energy_batch.var())
 
             def param_to_wavefunction(param_tree):
                 wavefunction = state.apply_fn(
                     {"params": param_tree},
                     batch,
-                )[0]
+                )
+
+                wavefunction = wavefunction[0]
 
                 return wavefunction.squeeze(-1)
 
@@ -184,8 +202,8 @@ class PsiFormerTrainer:
             energy_batch = energy_batch.squeeze(-1)
 
             total_grad = jax.vjp(param_to_wavefunction, state.params
-                                 )[1](energy_batch)[0]
-            mean_grad = tree_map(lambda g: g / energy_batch.shape[0], total_grad)
+                                 )[1](jnp.real(energy_batch))[0]
+            mean_grad = tree_map(lambda g: jnp.real(g / energy_batch.shape[0]), total_grad)
 
             return (output_energy, output_var), mean_grad
 

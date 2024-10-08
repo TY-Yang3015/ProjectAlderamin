@@ -111,15 +111,16 @@ class VanillaHamiltonian:
 
                 return phase
 
-            laplacian_op = folx.forward_laplacian(get_wavefunction, 0)
-            result = jax.vmap(laplacian_op)(batch)
-            laplacian, jacobian = result.laplacian, result.jacobian.dense_array
-            kinetic_term = -(laplacian + jnp.square(jacobian).sum(-1)) / 2.0
+            amp_laplacian_op = folx.forward_laplacian(get_wavefunction, 0)
+            amp_result = jax.vmap(amp_laplacian_op)(batch)
+            amp_laplacian, amp_jacobian = amp_result.laplacian, amp_result.jacobian.dense_array
 
-            laplacian_op = folx.forward_laplacian(get_phase, 0)
-            result = jax.vmap(laplacian_op)(batch)
-            laplacian, jacobian = result.laplacian, result.jacobian.dense_array
-            kinetic_term += (jnp.square(jacobian).sum(-1)) / 2.0
+            phase_laplacian_op = folx.forward_laplacian(get_phase, 0)
+            phase_result = jax.vmap(phase_laplacian_op)(batch)
+            phase_laplacian, phase_jacobian = phase_result.laplacian, phase_result.jacobian.dense_array
+            laplacian = amp_laplacian + 1.j*phase_laplacian
+            jacobian = amp_jacobian + 1.j*phase_jacobian
+            kinetic_term = -(laplacian + jnp.square(jacobian).sum(axis=-1)) / 2.
 
             kinetic_term = kinetic_term.reshape(-1, 1)
             energy_batch = kinetic_term + electric_term

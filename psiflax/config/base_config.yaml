@@ -1,7 +1,7 @@
 optimiser:
   type: "adam"
   adam:
-    init_learning_rate: 3e-4
+    init_learning_rate: 3e-5
     b1: 0.9
     b2: 0.999
   shampoo:
@@ -34,7 +34,7 @@ hyperparam:
   batch_size: 1024
   step: 200000
   training_seed: 114514
-  gradient_clipping: 1
+  gradient_clipping: 10000
   log_epsilon: 1e-24
 
   mad_clipping_factor: 5
