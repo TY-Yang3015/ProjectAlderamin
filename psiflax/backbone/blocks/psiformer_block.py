@@ -68,6 +68,26 @@ class PsiFormerBlock(nn.Module):
             )
         )
 
+        if self.use_norm is not False:
+            if self.group is not None:
+                x = nn.GroupNorm(
+                    num_groups=self.group
+                    if x.shape[-1] % self.group == 0
+                    else x.shape[-1],
+                    group_size=None,
+                    param_dtype=self.param_dtype,
+                )(x)
+            else:
+                x = nn.LayerNorm(
+                    dtype=self.computation_dtype,
+                    param_dtype=self.param_dtype,
+                    use_scale=True,
+                    use_bias=True,
+                    scale_init=nn.initializers.ones,
+                    bias_init=nn.initializers.zeros,
+                    epsilon=1e-5,
+                )(x)
+
         return x
 
 

@@ -9,7 +9,7 @@ def signed_log_sum_exp(signs, log_dets):
     # compute the signed exponential sum
     signed_exps = signs * jnp.exp(
         log_dets - max_log_det
-    )  # Incorporate the signs directly
+    )
     signed_sum = jnp.sum(signed_exps)
 
     # compute the log of the absolute value of the final sum

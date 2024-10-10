@@ -15,6 +15,8 @@ e = GlobalSystem(system_member=[li, h]).initialize_system()
 @hydra.main(version_base=None, config_path="./config", config_name="base_config")
 def execute(config: DictConfig) -> None:
     print(e.summary)
+    #import jax
+    #jax.config.update("jax_enable_x64", True)
 
     trainer = PsiFormerTrainer(config, e)
 

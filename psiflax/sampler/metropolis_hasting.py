@@ -148,8 +148,8 @@ class MetropolisHastingSampler:
         current_log_prob = 2.0 * self._burn_in_distribution(walker_state.positions)
         proposed_log_prob = 2.0 * self._burn_in_distribution(proposed_positions)
 
-        accept_probs = jnp.exp(proposed_log_prob - current_log_prob)
-        accept_probs = jnp.minimum(accept_probs, 1.0)
+        accept_probs = proposed_log_prob - current_log_prob
+        accept_probs = jnp.minimum(accept_probs, 0.)
 
         walker_state, decisions = self._mh_accept_step(
             walker_state, accept_probs, proposed_positions
@@ -163,11 +163,11 @@ class MetropolisHastingSampler:
         new_positions: jnp.ndarray,
     ) -> tuple[WalkerState, jnp.ndarray]:
         accept_decisions = (
-            random.uniform(
+            jnp.log(random.uniform(
                 walker_state.key,
                 shape=(walker_state.positions.shape[0],),
                 dtype=self.computation_dtype,
-            )
+            ))
             < accept_probs
         )
         updated_positions = jnp.where(
@@ -223,16 +223,16 @@ class MetropolisHastingSampler:
         )
         log_ratio = proposed_log_prob - current_log_prob
 
-        accept_probs = jnp.exp(log_ratio)  # (batch, 1)
+        accept_probs = log_ratio  # (batch, 1)
 
-        accept_probs = jnp.minimum(accept_probs, jnp.ones_like(accept_probs)).squeeze(
+        accept_probs = jnp.minimum(accept_probs, jnp.zeros_like(accept_probs)).squeeze(
             -1
         )
 
         walker_state, decisions = self._mh_accept_step(
             walker_state, accept_probs, proposed_positions
         )
-        return walker_state, decisions, accept_probs.mean()
+        return walker_state, decisions, jnp.exp(accept_probs).mean()
 
     def sample_psiformer(
         self, psiformer_train_state: TrainState, sample_step: int

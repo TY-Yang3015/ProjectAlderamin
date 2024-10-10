@@ -72,7 +72,6 @@ class PsiFormer(nn.Module):
             dtype=self.computation_dtype,
         )
 
-        # spins_reshaped = repeat(self.spins, f"e -> {coordinates.shape[0]} e 1")
         spins = jnp.ones((coordinates.shape[0], self.spin_counts[0], 1))
         spins = jnp.concatenate(
             [spins, -jnp.ones((coordinates.shape[0], self.spin_counts[1], 1))], axis=1
@@ -197,9 +196,9 @@ class PsiFormer(nn.Module):
         determinant = jnp.concatenate(determinants, axis=-1)
         jastrow_factor = SimpleJastrow()(single_electron_features)
 
-        determinant = determinant.at[:, :, 0, :].multiply(
-            jnp.expand_dims(jnp.exp(jastrow_factor), -1)
-        )
+        determinant *= jnp.exp(jastrow_factor
+                               / self.num_of_electrons
+                               ).reshape(jastrow_factor.shape[0], 1, 1, 1)
 
         log_abs_wavefunction = jax.vmap(signed_log_sum_exp)(
             *jnp.linalg.slogdet(determinant)
