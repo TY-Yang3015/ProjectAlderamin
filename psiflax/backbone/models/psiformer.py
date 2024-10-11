@@ -1,7 +1,7 @@
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from einops import repeat
+from einops import repeat, rearrange
 
 from psiflax.backbone.blocks import (
     PsiFormerBlock,
@@ -129,7 +129,7 @@ class PsiFormer(nn.Module):
             coordinates
         )
 
-        x = repeat(electron_nuclear_features, "b n c f -> b n (c f)")
+        x = rearrange(electron_nuclear_features, "b n c f -> b n (c f)")
         x = nn.Dense(
             features=self.num_heads * self.qkv_size,
             use_bias=False,
@@ -215,15 +215,15 @@ class PsiFormer(nn.Module):
 import jax
 
 print(PsiFormer(num_of_determinants=16,
-                num_of_electrons=6,
+                num_of_electrons=4,
                 num_of_nucleus=2,
-                num_of_blocks=5,
-                num_heads=8,
+                num_of_blocks=2,
+                num_heads=4,
                 qkv_size=64,
                 scale_input=True,
-                spin_counts=[3, 3],
+                spin_counts=[2, 2],
                 nuc_positions=jnp.array([[1, 0, 0], [0, 0, 0]]),
-                complex_output=True).tabulate(jax.random.PRNGKey(0),
-                                              jnp.ones((512, 6, 3)),
+                complex_output=False).tabulate(jax.random.PRNGKey(0),
+                                              jnp.ones((512, 4, 3)),
                                               depth=1, console_kwargs={'width': 150}))
 #"""
