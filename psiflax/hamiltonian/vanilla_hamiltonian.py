@@ -1,5 +1,6 @@
 import jax.numpy as jnp
 import jax
+from functools import partial
 import flax.struct as struct
 from flax.training.train_state import TrainState
 
@@ -25,6 +26,7 @@ class VanillaHamiltonian:
     nuc_charges: jnp.ndarray
     nuc_positions: jnp.ndarray
     complex_output: bool
+    mad_clipping_factor: int = 5
 
     def coulomb_potential_terms(self, coordinates: jnp.ndarray) -> jnp.ndarray:
         """
@@ -54,13 +56,13 @@ class VanillaHamiltonian:
             for i in range(self.num_of_electrons):
                 elec_nuc_term = elec_nuc_term.at[:, 0].add(
                     (
-                        self.nuc_charges[I]
-                        / (
-                            jnp.linalg.norm(
-                                coordinates[:, i, :] - self.nuc_positions[I, :],
-                                axis=-1,
+                            self.nuc_charges[I]
+                            / (
+                                jnp.linalg.norm(
+                                    coordinates[:, i, :] - self.nuc_positions[I, :],
+                                    axis=-1,
+                                )
                             )
-                        )
                     )
                 )
 
@@ -75,8 +77,9 @@ class VanillaHamiltonian:
 
         return elec_elec_term - elec_nuc_term + nuc_nuc_term
 
+    @partial(jax.custom_jvp, nondiff_argnums=(0, ))
     def get_local_energy(
-        self, state: TrainState, batch: jnp.ndarray
+            self, state: TrainState, batch: jnp.ndarray
     ) -> jnp.ndarray:
         """
         calculate the local energy of a given state and electron configuration.
@@ -118,8 +121,8 @@ class VanillaHamiltonian:
             phase_laplacian_op = folx.forward_laplacian(get_phase, 0)
             phase_result = jax.vmap(phase_laplacian_op)(batch)
             phase_laplacian, phase_jacobian = phase_result.laplacian, phase_result.jacobian.dense_array
-            laplacian = amp_laplacian + 1.j*phase_laplacian
-            jacobian = amp_jacobian + 1.j*phase_jacobian
+            laplacian = amp_laplacian + 1.j * phase_laplacian
+            jacobian = amp_jacobian + 1.j * phase_jacobian
             kinetic_term = -(laplacian + jnp.square(jacobian).sum(axis=-1)) / 2.
 
             kinetic_term = kinetic_term.reshape(-1, 1)
@@ -146,3 +149,56 @@ class VanillaHamiltonian:
             energy_batch = kinetic_term + electric_term
 
         return energy_batch
+
+    @get_local_energy.defjvp
+    def total_energy_jvp(self, primals, tangents):
+        params, data = primals
+        energy_batch = self.get_local_energy(self, params, data)
+
+        n = self.mad_clipping_factor
+        if self.complex_output:
+            real_energy_batch = jnp.real(energy_batch)
+            imag_energy_batch = jnp.imag(energy_batch)
+
+            real_mad = jnp.mean(jnp.abs(real_energy_batch - jnp.median(real_energy_batch)))
+            imag_mad = jnp.mean(jnp.abs(imag_energy_batch - jnp.median(imag_energy_batch)))
+
+            real_energy_batch = jnp.clip(real_energy_batch,
+                                         jnp.median(real_energy_batch) - (n * real_mad),
+                                         jnp.median(real_energy_batch) + (n * real_mad))
+            imag_energy_batch = jnp.clip(imag_energy_batch,
+                                         jnp.median(imag_energy_batch) - (n * imag_mad),
+                                         jnp.median(imag_energy_batch) + (n * imag_mad))
+
+            energy_batch = real_energy_batch + 1.j * imag_energy_batch
+        else:
+            mean_absolute_deviation = jnp.mean(
+                jnp.abs(energy_batch - jnp.median(energy_batch))
+            )
+            energy_batch = jnp.clip(
+                energy_batch,
+                jnp.median(energy_batch) - (n * mean_absolute_deviation),
+                jnp.median(energy_batch) + (n * mean_absolute_deviation),
+            )
+
+        def param_to_psi(state_param):
+            psi = params.apply_fn({'params': state_param}, data)
+            return psi[0]
+
+        psi_primal, psi_tangent = jax.jvp(param_to_psi, (primals[0].params, ), (tangents[0].params, ))
+        diff = energy_batch - energy_batch.mean()
+
+        if self.complex_output:
+            clipped_el = energy_batch
+            term1 = (jnp.dot(clipped_el, jnp.conjugate(psi_tangent)) +
+                     jnp.dot(jnp.conjugate(clipped_el), psi_tangent))
+            term2 = jnp.sum(energy_batch * psi_tangent.real)
+            primals_out = (energy_batch.real, )
+            device_batch_size = jnp.shape(energy_batch)[0]
+            tangents_out = ((term1 - 2 * term2).real / device_batch_size, )
+        else:
+            primals_out = (energy_batch, )
+            device_batch_size = jnp.shape(energy_batch)[0]
+            tangents_out = ((psi_tangent * diff) / device_batch_size, )
+
+        return primals_out, tangents_out
