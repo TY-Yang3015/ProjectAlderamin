@@ -173,7 +173,7 @@ class PsiFormerTrainer:
                                              jnp.median(imag_energy_batch) - (n * imag_mad),
                                              jnp.median(imag_energy_batch) + (n * imag_mad))
 
-                energy_batch = real_energy_batch + 1.j*imag_energy_batch
+                energy_batch = real_energy_batch + 1.j * imag_energy_batch
             else:
                 mean_absolute_deviation = jnp.mean(
                     jnp.abs(energy_batch - jnp.median(energy_batch))

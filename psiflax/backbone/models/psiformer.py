@@ -1,7 +1,7 @@
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from einops import repeat, rearrange
+from einops import rearrange
 
 from psiflax.backbone.blocks import (
     PsiFormerBlock,
@@ -53,12 +53,13 @@ class PsiFormer(nn.Module):
 
     def convert_to_input(
             self, coordinates: jnp.ndarray
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         """
         :param coordinates: the coordinates of the input coordinates, should have the shape
                             ``(batch, num_of_electrons, 3)``
-        :return: electron-nuclear features ``(batch, num_of_electrons, num_of_nucleus, 5)``
-                            , single-electron features ``(batch, num_of_electrons, 4)``
+        :return: electron-nuclear features ``(batch, num_of_electrons, num_of_nucleus, 4)``
+                            , single-electron features ``(batch, num_of_electrons, 4)``,
+                             spins ``(batch, num_of_electrons, 1)``
         """
 
         if coordinates.ndim == 2:
@@ -94,12 +95,6 @@ class PsiFormer(nn.Module):
                     )
                 )
 
-        spins = repeat(spins, f"b e 1 -> b e {len(self.nuc_positions)} 1")
-
-        electron_nuclear_features = jnp.concatenate(
-            [electron_nuclear_features, spins], axis=-1
-        )
-
         if self.scale_input:
             electron_nuclear_features = electron_nuclear_features.at[:, :, :, :4].set(
                 electron_nuclear_features[:, :, :, :4]
@@ -112,7 +107,7 @@ class PsiFormer(nn.Module):
                 )
             )
 
-        return electron_nuclear_features, single_electron_features
+        return electron_nuclear_features, single_electron_features, spins
 
     @nn.compact
     def __call__(
@@ -125,11 +120,12 @@ class PsiFormer(nn.Module):
         :return: wavefunction values with shape (batch, 1)
         """
 
-        electron_nuclear_features, single_electron_features = self.convert_to_input(
+        electron_nuclear_features, single_electron_features, spins = self.convert_to_input(
             coordinates
         )
 
         x = rearrange(electron_nuclear_features, "b n c f -> b n (c f)")
+        x = jnp.concatenate([x, spins], axis=-1)
         x = nn.Dense(
             features=self.num_heads * self.qkv_size,
             use_bias=False,
